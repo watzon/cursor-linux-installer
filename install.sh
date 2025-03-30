@@ -29,7 +29,7 @@ fi
 
 # Run cursor --update to download and install Cursor
 echo "Downloading and installing Cursor..."
-"$LOCAL_BIN/cursor" --update
+"$LOCAL_BIN/cursor" --update "$@"
 
 echo "Installation complete. You can now run 'cursor' to start Cursor."
 

@@ -15,13 +15,21 @@ You can install the Cursor Linux Installer using either curl or wget. Choose the
 ### Using curl
 
 ```bash
+# Install stable version (default)
 curl -fsSL https://raw.githubusercontent.com/watzon/cursor-linux-installer/main/install.sh | bash
+
+# Install latest version
+curl -fsSL https://raw.githubusercontent.com/watzon/cursor-linux-installer/main/install.sh | bash -s -- latest
 ```
 
 ### Using wget
 
 ```bash
+# Install stable version (default)
 wget -qO- https://raw.githubusercontent.com/watzon/cursor-linux-installer/main/install.sh | bash
+
+# Install latest version
+wget -qO- https://raw.githubusercontent.com/watzon/cursor-linux-installer/main/install.sh | bash -s -- latest
 ```
 
 The installation script will:
@@ -56,7 +64,13 @@ The uninstall script will:
 After installation, you can use the `cursor` command to launch Cursor or update it:
 
 - To launch Cursor: `cursor`
-- To update Cursor: `cursor --update`
+- To update Cursor: `cursor --update [options]`
+  - Update to stable version: `cursor --update` or `cursor --update stable`
+  - Update to latest version: `cursor --update latest`
+  - Additional arguments can be passed after `--update` to control the update behavior
+- To check Cursor version: `cursor --version` or `cursor -v`
+  - Shows the installed version of Cursor if available
+  - Returns an error if Cursor is not installed or version cannot be determined
 
 ## Note
 
