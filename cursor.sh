@@ -4,6 +4,46 @@ set -e
 
 ROOT=$(dirname "$(dirname "$(readlink -f $0)")")
 
+function check_fuse() {
+    # Set command prefix based on whether we're root
+    local cmd_prefix=""
+    if [ "$EUID" -ne 0 ]; then
+        cmd_prefix="sudo"
+    fi
+
+    # Check and install FUSE using the appropriate package manager
+    if command -v apt-get &> /dev/null; then
+        if ! dpkg -l | grep -q "^ii.*fuse "; then
+            echo "Installing FUSE..."
+            $cmd_prefix apt-get update
+            $cmd_prefix apt-get install -y fuse
+        else
+            echo "FUSE is already installed."
+        fi
+    elif command -v dnf &> /dev/null; then
+        if ! rpm -q fuse >/dev/null 2>&1; then
+            echo "Installing FUSE..."
+            $cmd_prefix dnf install -y fuse
+        else
+            echo "FUSE is already installed."
+        fi
+    elif command -v pacman &> /dev/null; then
+        if ! pacman -Qi fuse2 >/dev/null 2>&1; then
+            echo "Installing FUSE..."
+            $cmd_prefix pacman -S fuse2
+        else
+            echo "FUSE is already installed."
+        fi
+    else
+        echo "Unsupported package manager. Please install FUSE manually."
+        echo "You can install FUSE using your system's package manager:"
+        echo "  - Debian/Ubuntu: ${cmd_prefix}apt-get install fuse"
+        echo "  - Fedora: ${cmd_prefix}dnf install fuse"
+        echo "  - Arch Linux: ${cmd_prefix}pacman -S fuse2"
+        exit 1
+    fi
+}
+
 function get_arch() {
     local arch=$(uname -m)
     if [ "$arch" == "x86_64" ]; then
@@ -95,6 +135,9 @@ function install_cursor() {
         echo "$message"
         return 1
     fi
+
+    # Check for FUSE before proceeding with installation
+    check_fuse
 
     local download_url=$(echo "$download_info" | grep "URL=" | sed 's/^URL=//')
     local version=$(echo "$download_info" | grep "VERSION=" | sed 's/^VERSION=//')
