@@ -34,12 +34,20 @@ function check_fuse() {
         else
             echo "FUSE is already installed."
         fi
+    elif command -v zypper &>/dev/null; then
+        if ! rpm -q fuse >/dev/null 2>&1; then
+            echo "Installing FUSE..."
+            $cmd_prefix zypper install -y fuse
+        else
+            echo "FUSE is already installed."
+        fi
     else
         echo "Unsupported package manager. Please install FUSE manually."
         echo "You can install FUSE using your system's package manager:"
         echo "  - Debian/Ubuntu: ${cmd_prefix}apt-get install fuse"
         echo "  - Fedora: ${cmd_prefix}dnf install fuse"
         echo "  - Arch Linux: ${cmd_prefix}pacman -S fuse2"
+        echo "  - SUSE: ${cmd_prefix}zypper install fuse"
         exit 1
     fi
 }
