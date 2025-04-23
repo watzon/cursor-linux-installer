@@ -3,7 +3,7 @@
 set -e
 
 # URL of the cursor.sh script in the GitHub repository
-CURSOR_SCRIPT_URL="https://raw.githubusercontent.com/watzon/cursor-linux-installer/main/cursor.sh"
+CURSOR_SCRIPT_URL="https://raw.githubusercontent.com/jr551/cursor-linux-installer/refs/heads/main/cursor.sh"
 
 # Local bin directory
 LOCAL_BIN="$HOME/.local/bin"

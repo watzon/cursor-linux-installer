@@ -2,7 +2,8 @@
 
 set -e
 
-ROOT=$(dirname "$(dirname "$(readlink -f $0)")")
+# Get the directory where the script is located
+ROOT=$(dirname "$(readlink -f "$0")")
 
 function check_fuse() {
     # Set command prefix based on whether we're root
@@ -34,12 +35,20 @@ function check_fuse() {
         else
             echo "FUSE is already installed."
         fi
+    elif command -v zypper &>/dev/null; then
+        if ! rpm -q fuse >/dev/null 2>&1; then
+            echo "Installing FUSE..."
+            $cmd_prefix zypper install -y fuse
+        else
+            echo "FUSE is already installed."
+        fi
     else
         echo "Unsupported package manager. Please install FUSE manually."
         echo "You can install FUSE using your system's package manager:"
         echo "  - Debian/Ubuntu: ${cmd_prefix}apt-get install fuse"
         echo "  - Fedora: ${cmd_prefix}dnf install fuse"
         echo "  - Arch Linux: ${cmd_prefix}pacman -S fuse2"
+        echo "  - SUSE: ${cmd_prefix}zypper install fuse"
         exit 1
     fi
 }
@@ -171,12 +180,13 @@ function install_cursor() {
     # Copy icons
     local icon_dir="$HOME/.local/share/icons/hicolor"
     mkdir -p "$icon_dir"
-    cp -r squashfs-root/usr/share/icons/hicolor/* "$icon_dir/"
+    # Copy our custom PNG icon
+    cp "$ROOT/cursor.png" "$icon_dir/256x256/apps/cursor.png"
 
     # Copy desktop file
     local apps_dir="$HOME/.local/share/applications"
     mkdir -p "$apps_dir"
-    cp squashfs-root/cursor.desktop "$apps_dir/"
+    cp "$ROOT/cursor.desktop" "$apps_dir/"
 
     # Update desktop file to point to the correct AppImage location
     sed -i "s|Exec=.*|Exec=$install_dir/cursor.appimage --no-sandbox|g" "$apps_dir/cursor.desktop"
@@ -221,7 +231,7 @@ function launch_cursor() {
     local log_file="/tmp/cursor_appimage.log"
 
     # Run the AppImage in the background using nohup, redirecting output and errors to a log file
-    nohup "$cursor_appimage" --no-sandbox "$@" >"$log_file" 2>&1 &
+    nohup "$cursor_appimage" --no-sandbox --enable-features=UseOzonePlatform --ozone-platform=wayland "$@" >"$log_file" 2>&1 &
 
     # Capture the process ID (PID) of the background process
     local pid=$!
