@@ -102,7 +102,7 @@ function get_download_info() {
     local api_url="https://www.cursor.com/api/download?platform=linux-$(get_arch)&releaseTrack=$release_track"
 
     echo "Fetching download info for $release_track track..."
-    if ! curl -s "$api_url" -o "$temp_file"; then
+    if ! curl -sL "$api_url" -o "$temp_file"; then
         rm -f "$temp_file"
         get_fallback_download_info "curl failed on $api_url"
         return 1
