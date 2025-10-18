@@ -363,7 +363,7 @@ function install_cursor_extracted() {
     mkdir -p "$apps_dir"
     if [ -f "$install_dir/cursor/cursor.desktop" ]; then
         cp "$install_dir/cursor/cursor.desktop" "$apps_dir/"
-        sed -i "s|^Exec=.*|Exec=\"$HOME/.local/bin/cursor\" --no-sandbox --open-url \"%U\"|" "$apps_dir/cursor.desktop"
+        sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/cursor --no-sandbox --open-url %U|" "$apps_dir/cursor.desktop"
         sed -i 's/^Icon=co.anysphere.cursor/Icon=cursor/' "$apps_dir/cursor.desktop"
         
         # Fix MimeType
@@ -499,7 +499,7 @@ function install_cursor() {
     if [ -f "squashfs-root/cursor.desktop" ]; then
         cp squashfs-root/cursor.desktop "$apps_dir/"
         # Update desktop file to point to the correct AppImage location
-        sed -i "s|^Exec=.*|Exec=\"$install_dir/cursor.appimage\" --no-sandbox --open-url \"%U\"|" "$apps_dir/cursor.desktop"
+        sed -i "s|^Exec=.*|Exec=$install_dir/cursor.appimage --no-sandbox --open-url %U|" "$apps_dir/cursor.desktop"
 
         # Fix potential icon name mismatch in the extracted desktop file
         sed -i 's/^Icon=co.anysphere.cursor/Icon=cursor/' "$apps_dir/cursor.desktop"
@@ -527,6 +527,76 @@ function install_cursor() {
 
     log_ok "Cursor has been installed to $install_dir/cursor.appimage"
     log_ok "Icons and desktop file installed"
+}
+
+function reinstall_desktop_file() {
+    log_step "Reinstalling Cursor desktop file..."
+
+    local apps_dir="$HOME/.local/share/applications"
+    mkdir -p "$apps_dir"
+
+    # Prefer extracted installation if present
+    local extracted_root
+    if extracted_root=$(get_extracted_root); then
+        local src_desktop="$extracted_root/cursor/cursor.desktop"
+        if [ ! -f "$src_desktop" ]; then
+            log_error "cursor.desktop not found in extracted installation at $src_desktop"
+            return 1
+        fi
+        cp "$src_desktop" "$apps_dir/"
+        # Set Exec to launcher script
+        sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/cursor --no-sandbox --open-url %U|" "$apps_dir/cursor.desktop"
+    else
+        # Fall back to AppImage installation
+        local cursor_appimage
+        cursor_appimage=$(find_cursor_appimage || true)
+        if [ -z "$cursor_appimage" ]; then
+            log_error "Cursor installation not found. Install or update before reinstalling desktop file."
+            return 1
+        fi
+        local install_dir
+        install_dir=$(dirname "$cursor_appimage")
+        local temp_extract_dir
+        temp_extract_dir=$(mktemp -d)
+        local current_dir
+        current_dir=$(pwd)
+        cd "$temp_extract_dir"
+        if ! "$cursor_appimage" --appimage-extract "cursor.desktop" >/dev/null 2>&1; then
+            log_warn "Failed to extract cursor.desktop from AppImage."
+        fi
+        if [ -f "squashfs-root/cursor.desktop" ]; then
+            cp "squashfs-root/cursor.desktop" "$apps_dir/"
+        else
+            log_warn "cursor.desktop not found in extraction; creating minimal desktop entry."
+            cat > "$apps_dir/cursor.desktop" <<EOF
+[Desktop Entry]
+Name=Cursor
+Exec=$install_dir/cursor.appimage --no-sandbox --open-url %U
+Terminal=false
+Type=Application
+Icon=cursor
+Categories=Development;IDE;TextEditor;
+MimeType=x-scheme-handler/cursor;
+EOF
+        fi
+        cd "$current_dir"
+        rm -rf "$temp_extract_dir"
+        # Ensure Exec points to AppImage
+        sed -i "s|^Exec=.*|Exec=$install_dir/cursor.appimage --no-sandbox --open-url %U|" "$apps_dir/cursor.desktop"
+    fi
+
+    # Normalize icon name and ensure custom scheme support
+    sed -i 's/^Icon=co.anysphere.cursor/Icon=cursor/' "$apps_dir/cursor.desktop"
+    if grep -q '^MimeType=' "$apps_dir/cursor.desktop"; then
+        sed -i '/^MimeType=/{
+                /x-scheme-handler\/cursor;/!s/$/x-scheme-handler\/cursor;/
+            }' "$apps_dir/cursor.desktop"
+    else
+        echo 'MimeType=x-scheme-handler/cursor;' >> "$apps_dir/cursor.desktop"
+    fi
+
+    update-desktop-database "$apps_dir" 2>/dev/null || true
+    log_ok "Desktop file reinstalled at $apps_dir/cursor.desktop"
 }
 
 function update_cursor() {
@@ -693,6 +763,10 @@ case "$1" in
         fi
         exit $?
         ;;
+    --reinstall-desktop)
+        reinstall_desktop_file
+        exit $?
+        ;;
     --help|-h)
         cat << 'HELP'
 Usage: cursor [OPTIONS] [ARGUMENTS]
@@ -701,6 +775,7 @@ Options:
   --version, -v           Show the installed version of Cursor
   --update [stable|latest] Update Cursor to the specified release track
   --extract, --no-fuse    Install/update Cursor in extracted mode (no FUSE required)
+  --reinstall-desktop     Reinstall only the desktop entry for debugging
   --help, -h              Show this help message
 
 Installation Modes:
