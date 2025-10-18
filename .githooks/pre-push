@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Git pre-push hook: enforce canonical links only when pushing local main
+# Canonical target: watzon/cursor-linux-installer@main
+
+# Read remote name/url provided by git
+remote_name=${1:-}
+remote_url=${2:-}
+
+should_check=false
+main_local_sha=""
+main_remote_sha=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$local_ref" = "refs/heads/main" ] || [ "$remote_ref" = "refs/heads/main" ]; then
+    should_check=true
+    main_local_sha="$local_sha"
+    main_remote_sha="$remote_sha"
+    break
+  fi
+done
+
+if [ "$should_check" = true ]; then
+  echo "pre-push: enforcing canonical links for main (remote=$remote_name url=$remote_url local_sha=$main_local_sha remote_sha=$main_remote_sha)..."
+  hook_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  bash "$hook_dir/../scripts/check-links.sh"
+fi
+
+exit 0
+
+
