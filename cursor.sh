@@ -222,6 +222,46 @@ function get_download_info() {
     return 0
 }
 
+function clean_broken_cursor_symlinks() {
+    local relative_path="$1"
+    local target_root="$2"
+    local destination="$target_root/$relative_path"
+    local destination_dir
+    destination_dir=$(dirname "$destination")
+
+    mkdir -p "$destination_dir"
+
+    if [ -L "$destination" ] && [ ! -e "$destination" ]; then
+        rm -f "$destination"
+    fi
+}
+
+function install_icons_from_source() {
+    local source_root="$1"
+    local target_root="$HOME/.local/share/icons/hicolor"
+
+    mkdir -p "$target_root"
+
+    if [ ! -d "$source_root" ]; then
+        return 1
+    fi
+
+    if command -v find >/dev/null 2>&1; then
+        while IFS= read -r relative_file; do
+            [ -z "$relative_file" ] && continue
+            clean_broken_cursor_symlinks "$relative_file" "$target_root"
+        done < <(cd "$source_root" && find . -type f -name 'cursor.*' -printf '%P\n')
+    fi
+
+    if command cp -r "$source_root/"* "$target_root/" 2>/dev/null; then
+        log_ok "Icons installed to $target_root"
+        return 0
+    fi
+
+    log_warn "Icon copy failed."
+    return 1
+}
+
 function create_launcher_script() {
     local extracted_root="$1"
     local launcher_script="$HOME/.local/bin/cursor"
@@ -352,31 +392,38 @@ function install_cursor_extracted() {
     create_launcher_script "$install_dir"
 
     # Install icons
-    local icon_dir="$HOME/.local/share/icons/hicolor"
-    mkdir -p "$icon_dir"
-    if [ -d "$install_dir/cursor/usr/share/icons/hicolor" ]; then
-        cp -r "$install_dir/cursor/usr/share/icons/hicolor/"* "$icon_dir/" 2>/dev/null || log_warn "Icon copy failed."
+    local icons_installed=false
+    local icon_source="$install_dir/cursor/usr/share/icons/hicolor"
+    if [ -d "$icon_source" ]; then
+        if install_icons_from_source "$icon_source"; then
+            icons_installed=true
+        fi
     fi
 
     # Install desktop file
     local apps_dir="$HOME/.local/share/applications"
+    local desktop_installed=false
     mkdir -p "$apps_dir"
     if [ -f "$install_dir/cursor/cursor.desktop" ]; then
-        cp "$install_dir/cursor/cursor.desktop" "$apps_dir/"
-        sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/cursor --no-sandbox --open-url %U|" "$apps_dir/cursor.desktop"
-        sed -i 's/^Icon=co.anysphere.cursor/Icon=cursor/' "$apps_dir/cursor.desktop"
-        
-        # Fix MimeType
-        if grep -q '^MimeType=' "$apps_dir/cursor.desktop"; then
-            sed -i '/^MimeType=/{
-                /x-scheme-handler\/cursor;/!s/$/x-scheme-handler\/cursor;/
-            }' "$apps_dir/cursor.desktop"
-        else
-            echo 'MimeType=x-scheme-handler/cursor;' >> "$apps_dir/cursor.desktop"
-        fi
+        if cp "$install_dir/cursor/cursor.desktop" "$apps_dir/"; then
+            sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/cursor --no-sandbox --open-url %U|" "$apps_dir/cursor.desktop"
+            sed -i 's/^Icon=co.anysphere.cursor/Icon=cursor/' "$apps_dir/cursor.desktop"
+            
+            # Fix MimeType
+            if grep -q '^MimeType=' "$apps_dir/cursor.desktop"; then
+                sed -i '/^MimeType=/{
+                    /x-scheme-handler\/cursor;/!s/$/x-scheme-handler\/cursor;/
+                }' "$apps_dir/cursor.desktop"
+            else
+                echo 'MimeType=x-scheme-handler/cursor;' >> "$apps_dir/cursor.desktop"
+            fi
 
-        update-desktop-database "$apps_dir" 2>/dev/null || true
-        log_ok ".desktop file installed and updated."
+            update-desktop-database "$apps_dir" 2>/dev/null || true
+            log_ok ".desktop file installed and updated."
+            desktop_installed=true
+        else
+            log_warn "Failed to install .desktop file."
+        fi
     fi
 
     # Cleanup
@@ -387,6 +434,15 @@ function install_cursor_extracted() {
     log_ok "Cursor $version has been extracted and installed to $install_dir/cursor"
     log_ok "No FUSE required - running as native application"
     log_ok "Launcher script created at $HOME/.local/bin/cursor"
+    if [ "$icons_installed" = true ] && [ "$desktop_installed" = true ]; then
+        log_ok "Icons and desktop file installed"
+    elif [ "$icons_installed" = true ]; then
+        log_warn "Icons installed, but desktop file installation skipped or failed."
+    elif [ "$desktop_installed" = true ]; then
+        log_warn "Desktop file installed, but icons installation skipped or failed."
+    else
+        log_warn "Icons and desktop file were not installed."
+    fi
     return 0
 }
 
@@ -487,36 +543,43 @@ function install_cursor() {
     fi
 
     # Copy icons
-    local icon_dir="$HOME/.local/share/icons/hicolor"
-    mkdir -p "$icon_dir"
-    if [ -d "squashfs-root/usr/share/icons/hicolor" ]; then
-        cp -r squashfs-root/usr/share/icons/hicolor/* "$icon_dir/" 2>/dev/null || log_warn "Icon copy failed."
+    local icons_installed=false
+    local icon_source="squashfs-root/usr/share/icons/hicolor"
+    if [ -d "$icon_source" ]; then
+        if install_icons_from_source "$icon_source"; then
+            icons_installed=true
+        fi
     fi
 
     # Copy desktop file
     local apps_dir="$HOME/.local/share/applications"
+    local desktop_installed=false
     mkdir -p "$apps_dir"
     if [ -f "squashfs-root/cursor.desktop" ]; then
-        cp squashfs-root/cursor.desktop "$apps_dir/"
-        # Update desktop file to point to the correct AppImage location
-        sed -i "s|^Exec=.*|Exec=$install_dir/cursor.appimage --no-sandbox --open-url %U|" "$apps_dir/cursor.desktop"
+        if cp squashfs-root/cursor.desktop "$apps_dir/"; then
+            # Update desktop file to point to the correct AppImage location
+            sed -i "s|^Exec=.*|Exec=$install_dir/cursor.appimage --no-sandbox --open-url %U|" "$apps_dir/cursor.desktop"
 
-        # Fix potential icon name mismatch in the extracted desktop file
-        sed -i 's/^Icon=co.anysphere.cursor/Icon=cursor/' "$apps_dir/cursor.desktop"
+            # Fix potential icon name mismatch in the extracted desktop file
+            sed -i 's/^Icon=co.anysphere.cursor/Icon=cursor/' "$apps_dir/cursor.desktop"
 
-        # Fix MimeType to support xdg-open and backlinks
-        # If MimeType line exists, append x-scheme-handler/cursor; if not already present; else add the line
-        if grep -q '^MimeType=' "$apps_dir/cursor.desktop"; then
-            sed -i '/^MimeType=/{
-                /x-scheme-handler\/cursor;/!s/$/x-scheme-handler\/cursor;/
-            }' "$apps_dir/cursor.desktop"
+            # Fix MimeType to support xdg-open and backlinks
+            # If MimeType line exists, append x-scheme-handler/cursor; if not already present; else add the line
+            if grep -q '^MimeType=' "$apps_dir/cursor.desktop"; then
+                sed -i '/^MimeType=/{
+                    /x-scheme-handler\/cursor;/!s/$/x-scheme-handler\/cursor;/
+                }' "$apps_dir/cursor.desktop"
+            else
+                echo 'MimeType=x-scheme-handler/cursor;' >> "$apps_dir/cursor.desktop"
+            fi
+
+            # Refresh desktop database for menu visibility
+            update-desktop-database "$apps_dir" 2>/dev/null || true
+            log_ok ".desktop file installed and updated."
+            desktop_installed=true
         else
-            echo 'MimeType=x-scheme-handler/cursor;' >> "$apps_dir/cursor.desktop"
+            log_warn "Failed to install .desktop file."
         fi
-
-        # Refresh desktop database for menu visibility
-        update-desktop-database "$apps_dir" 2>/dev/null || true
-        log_ok ".desktop file installed and updated."
     else
         log_warn "cursor.desktop not found in extraction—manual setup needed."
     fi
@@ -526,7 +589,15 @@ function install_cursor() {
     rm -rf "$temp_extract_dir"
 
     log_ok "Cursor has been installed to $install_dir/cursor.appimage"
-    log_ok "Icons and desktop file installed"
+    if [ "$icons_installed" = true ] && [ "$desktop_installed" = true ]; then
+        log_ok "Icons and desktop file installed"
+    elif [ "$icons_installed" = true ]; then
+        log_warn "Icons installed, but desktop file installation skipped or failed."
+    elif [ "$desktop_installed" = true ]; then
+        log_warn "Desktop file installed, but icons installation skipped or failed."
+    else
+        log_warn "Icons and desktop file were not installed."
+    fi
 }
 
 function reinstall_desktop_file() {
