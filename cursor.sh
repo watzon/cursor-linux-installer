@@ -350,12 +350,12 @@ if [ "$1" == "--version" ] || [ "$1" == "-v" ]; then
     exit $?
 elif [ "$1" == "--check" ] || [ "$1" == "-c" ]; then
     check_cursor_versions
-elif [ "$1" == "--update" ]; then
+elif [ "$1" == "--update" ] || [ "$1" == "-u" ]; then
     update_cursor "$2"
 elif [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
     echo "Usage: cursor [--check | --update <stable|latest> | --version]"
     echo "  --check, -c: Show the stable and latest version of Cursor available for download"
-    echo "  --update: Update Cursor to the specified version"
+    echo "  --update, -u: Update Cursor to the specified version"
     echo "  --version, -v: Show the installed version of Cursor"
     exit 0
 else
