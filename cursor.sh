@@ -353,7 +353,7 @@ elif [ "$1" == "--check" ] || [ "$1" == "-c" ]; then
 elif [ "$1" == "--update" ]; then
     update_cursor "$2"
 elif [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
-    echo "Usage: cursor [--check <stable|latest> | --update <stable|latest> | --version]"
+    echo "Usage: cursor [--check | --update <stable|latest> | --version]"
     echo "  --check, -c: Show the stable and latest version of Cursor available for download"
     echo "  --update: Update Cursor to the specified version"
     echo "  --version, -v: Show the installed version of Cursor"
