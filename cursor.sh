@@ -142,18 +142,6 @@ function get_download_info() {
     return 0
 }
 
-function remote_cursor() {
-    local release_track=${1:-stable} # Default to stable if not specified
-    local download_info=$(get_download_info "$release_track")
-    local download_url=$(echo "$download_info" | grep "URL=" | sed 's/^URL=//')
-    local version=$(echo "$download_info" | grep "VERSION=" | sed 's/^VERSION=//')
-    echo "$version is available for download."
-    echo "Download URL: $download_url"
-    echo "Version: $version"
-    echo "Release Track: $release_track"
-    return 0
-}
-
 function install_cursor() {
     local install_dir="$1"
     local release_track=${2:-stable} # Default to stable if not specified
@@ -344,17 +332,30 @@ function get_version() {
     fi
 }
 
+function check_cursor_versions() {
+    local release_track=${1:-stable} # Default to stable if not specified
+    local stable_info=$(get_download_info "stable")
+    local stable_version=$(echo "$stable_info" | grep "VERSION=" | sed 's/^VERSION=//')
+    local latest_info=$(get_download_info "latest")
+    local latest_version=$(echo "$latest_info" | grep "VERSION=" | sed 's/^VERSION=//')
+    echo "Stable Version: $stable_version"
+    echo "Latest Version: $latest_version"
+    echo "--------------------------------"
+    get_version
+    return 0
+}
+
 # Parse command-line arguments
 if [ "$1" == "--version" ] || [ "$1" == "-v" ]; then
     get_version
     exit $?
-elif [ "$1" == "--remote" ] || [ "$1" == "-r" ]; then
-    remote_cursor "$2"
+elif [ "$1" == "--check" ] || [ "$1" == "-c" ]; then
+    check_cursor_versions
 elif [ "$1" == "--update" ]; then
     update_cursor "$2"
 elif [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
     echo "Usage: cursor [--remote <stable|latest> | --update <stable|latest> | --version]"
-    echo "  --remote: Show the latest version of Cursor available for download"
+    echo "  --check, -c: Show the stable and latest version of Cursor available for download"
     echo "  --update: Update Cursor to the specified version"
     echo "  --version, -v: Show the installed version of Cursor"
     exit 0
