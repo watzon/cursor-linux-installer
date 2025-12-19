@@ -333,7 +333,6 @@ function get_version() {
 }
 
 function check_cursor_versions() {
-    local release_track=${1:-stable} # Default to stable if not specified
     local stable_info=$(get_download_info "stable")
     local stable_version=$(echo "$stable_info" | grep "VERSION=" | sed 's/^VERSION=//')
     local latest_info=$(get_download_info "latest")
