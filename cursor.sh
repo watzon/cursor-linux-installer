@@ -372,7 +372,7 @@ function install_cursor_extracted() {
 
     # Create installation directory and move extracted content
     mkdir -p "$install_dir"
-    rm -rf "$install_dir/cursor"
+    safe_remove "$install_dir/cursor" "existing extracted installation" true
     mv squashfs-root "$install_dir/cursor"
 
     # Mark as extracted installation
@@ -518,7 +518,7 @@ function install_cursor() {
     fi
     if ! echo "$binary_info" | grep -q "$expected_grep"; then
         echo "Error: Arch mismatch detected ($binary_info). Expected $expected_grep. Aborting install." >&2
-        rm -f "$install_dir/cursor.appimage"
+        safe_remove "$install_dir/cursor.appimage" "Cursor AppImage"
         return 1
     fi
     log_ok "Binary verified: $binary_info"

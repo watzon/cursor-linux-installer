@@ -75,7 +75,7 @@ mkdir -p "$LOCAL_BIN"
 # Remove legacy installer CLI if present to avoid conflicts
 if [ -f "$LEGACY_CLI" ] && grep -q "install_cursor_extracted" "$LEGACY_CLI"; then
     log_warn "Removing legacy 'cursor' installer CLI to avoid conflicts."
-    rm -f "$LEGACY_CLI"
+    safe_remove "$LEGACY_CLI" "legacy cursor installer CLI"
 fi
 
 # Place cursor-installer CLI into ~/.local/bin from local file or GitHub
