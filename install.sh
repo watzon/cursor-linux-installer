@@ -2,19 +2,6 @@
 
 set -e
 
-# Color and logging helpers
-if [ -t 1 ]; then
-    BOLD="\033[1m"; RESET="\033[0m"; RED="\033[31m"; GREEN="\033[32m"; YELLOW="\033[33m"; BLUE="\033[34m"
-else
-    BOLD=""; RESET=""; RED=""; GREEN=""; YELLOW=""; BLUE=""
-fi
-
-log_info()  { echo -e "${BLUE}[*]${RESET} $*"; }
-log_ok()    { echo -e "${GREEN}[✓]${RESET} $*"; }
-log_warn()  { echo -e "${YELLOW}[!]${RESET} $*"; }
-log_error() { echo -e "${RED}[x]${RESET} $*"; }
-log_step()  { echo -e "${BOLD}$*${RESET}"; }
-
 # Parse arguments
 RELEASE_TRACK="stable"
 INSTALL_MODE="appimage"
@@ -52,30 +39,62 @@ REPO_BRANCH=${REPO_BRANCH:-main}
 REPO_NAME=${REPO_NAME:-cursor-linux-installer}
 BASE_RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}"
 CURSOR_SCRIPT_URL="$BASE_RAW_URL/cursor.sh"
+LIB_DIR="$HOME/.local/share/cursor-installer"
+LIB_PATH="$SCRIPT_DIR/lib.sh"
+SHARED_LIB="$LIB_DIR/lib.sh"
+LIB_URL="$BASE_RAW_URL/lib.sh"
+
+# Source shared helpers (local repo, installed lib, or download)
+if [ -f "$LIB_PATH" ]; then
+    # shellcheck disable=SC1090
+    source "$LIB_PATH"
+    mkdir -p "$LIB_DIR"
+    cp "$LIB_PATH" "$SHARED_LIB"
+elif [ -f "$SHARED_LIB" ]; then
+    # shellcheck disable=SC1090
+    source "$SHARED_LIB"
+else
+    mkdir -p "$LIB_DIR"
+    curl -fsSL "$LIB_URL" -o "$SHARED_LIB" || {
+        echo "Failed to download lib.sh from GitHub" >&2
+        exit 1
+    }
+    # shellcheck disable=SC1090
+    source "$SHARED_LIB"
+fi
 
 # Local bin directory
 LOCAL_BIN="$HOME/.local/bin"
+CLI_NAME="cursor-installer"
+CLI_PATH="$LOCAL_BIN/$CLI_NAME"
+LEGACY_CLI="$LOCAL_BIN/cursor"
 
 # Create ~/.local/bin if it doesn't exist
 mkdir -p "$LOCAL_BIN"
 
-# Place cursor launcher into ~/.local/bin from local file or GitHub
-log_step "Preparing cursor launcher script..."
+# Remove legacy installer CLI if present to avoid conflicts
+if [ -f "$LEGACY_CLI" ] && grep -q "install_cursor_extracted" "$LEGACY_CLI"; then
+    log_warn "Removing legacy 'cursor' installer CLI to avoid conflicts."
+    rm -f "$LEGACY_CLI"
+fi
+
+# Place cursor-installer CLI into ~/.local/bin from local file or GitHub
+log_step "Preparing cursor-installer CLI script..."
 if [ -f "$LOCAL_CURSOR_SH" ]; then
     log_info "Using local cursor.sh from repository"
-    cp "$LOCAL_CURSOR_SH" "$LOCAL_BIN/cursor"
+    cp "$LOCAL_CURSOR_SH" "$CLI_PATH"
 else
     log_info "Downloading cursor.sh from GitHub..."
-curl -fsSL "$CURSOR_SCRIPT_URL" -o "$LOCAL_BIN/cursor" || {
+curl -fsSL "$CURSOR_SCRIPT_URL" -o "$CLI_PATH" || {
     echo "Failed to download cursor.sh from GitHub" >&2
     exit 1
 }
 fi
 
 # Make the script executable
-chmod +x "$LOCAL_BIN/cursor"
+chmod +x "$CLI_PATH"
 
-log_ok "Cursor installer script has been placed in $LOCAL_BIN/cursor"
+log_ok "Cursor installer script has been placed in $CLI_PATH"
 
 # Check if ~/.local/bin is in PATH
 if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
@@ -87,10 +106,10 @@ fi
 # Run cursor --update to download and install Cursor
 log_step "Downloading and installing Cursor ($INSTALL_MODE mode) from ${REPO_OWNER}/${REPO_NAME}@${REPO_BRANCH}..."
 if [ "$INSTALL_MODE" = "extracted" ]; then
-    "$LOCAL_BIN/cursor" --extract --update "$RELEASE_TRACK"
+    "$CLI_PATH" --extract --update "$RELEASE_TRACK"
 else
-    "$LOCAL_BIN/cursor" --update "$RELEASE_TRACK"
+    "$CLI_PATH" --update "$RELEASE_TRACK"
 fi
 
-log_ok "Installation complete. You can now run 'cursor' to start Cursor."
+log_ok "Installation complete. You can now run '$CLI_NAME' to start Cursor."
 

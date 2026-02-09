@@ -5,7 +5,7 @@ Cursor is an excellent AI-powered code editor, but it doesn't treat Linux as a f
 This repository aims to solve that problem by providing a set of shell scripts that will:
 
 1. Download and install Cursor for you
-2. Provide a `cursor` command that you can run from your shell
+2. Provide a `cursor-installer` command that you can run from your shell
 3. Allow you to easily update Cursor when new versions are released
 
 ## Installation
@@ -40,9 +40,10 @@ wget -qO- https://raw.githubusercontent.com/watzon/cursor-linux-installer/main/i
 
 The one‑liner script will:
 
-1. Download the `cursor.sh` script and save it as `cursor` in `~/.local/bin/`
-2. Make the script executable
-3. Download and install the latest version of Cursor
+1. Download the `cursor.sh` script and save it as `cursor-installer` in `~/.local/bin/`
+2. Download `lib.sh` to `~/.local/share/cursor-installer/lib.sh`
+3. Make the script executable
+4. Download and install the latest version of Cursor
 
 **Note:** If you're installing via the piped bash method and don't have FUSE2 installed, the script will warn you but continue. You'll need to either:
 
@@ -65,7 +66,7 @@ cd cursor-linux-installer
 ./install.sh latest --extract
 ```
 
-When you run `./install.sh` from the repo, it uses the local `cursor.sh` instead of downloading from GitHub.
+When you run `./install.sh` from the repo, it uses the local `cursor.sh` and `lib.sh` instead of downloading from GitHub.
 
 ### Maintainers: Switching between personal and canonical repos
 
@@ -120,20 +121,24 @@ bash -c "$(wget -qO- https://raw.githubusercontent.com/watzon/cursor-linux-insta
 
 The uninstall script will:
 
-1. Remove the `cursor` script from `~/.local/bin/`
-2. Remove the Cursor AppImage
-3. Ask if you want to remove the Cursor configuration files
+1. Remove the `cursor-installer` script from `~/.local/bin/`
+2. Remove the shared `lib.sh` from `~/.local/share/cursor-installer/`
+3. Remove the Cursor AppImage
+4. Ask if you want to remove the Cursor configuration files
 
 ## Usage
 
-After installation, you can use the `cursor` command to launch Cursor or update it:
+Note: The installer CLI is `cursor-installer` to avoid conflicts with Cursor's official `cursor` CLI.
 
-- To launch Cursor: `cursor`
-- To update Cursor: `cursor --update [options]`
-  - Update to stable version: `cursor --update` or `cursor --update stable`
-  - Update to latest version: `cursor --update latest`
+After installation, you can use the `cursor-installer` command to launch Cursor or update it:
+
+- To launch Cursor: `cursor-installer`
+- To update Cursor: `cursor-installer --update [options]`
+  - Update to stable version: `cursor-installer --update` or `cursor-installer --update stable`
+  - Update to latest version: `cursor-installer --update latest`
   - Additional arguments can be passed after `--update` to control the update behavior
-- To check Cursor version: `cursor --version` or `cursor -v`
+- To check available versions: `cursor-installer --check` or `cursor-installer -c`
+- To check Cursor version: `cursor-installer --version` or `cursor-installer -v`
   - Shows the installed version of Cursor if available
   - Returns an error if Cursor is not installed or version cannot be determined
 
@@ -157,7 +162,7 @@ The default mode installs Cursor as an AppImage. This requires FUSE2 to be insta
 **Usage:**
 
 ```bash
-cursor --update stable
+cursor-installer --update stable
 ```
 
 ### Extracted Mode (FUSE-Free)
@@ -179,14 +184,14 @@ This mode fully extracts the AppImage and installs Cursor as a native applicatio
 
 ```bash
 # Install in extracted mode
-cursor --extract
+cursor-installer --extract
 
 # Update in extracted mode
-cursor --extract --update stable
+cursor-installer --extract --update stable
 
 # Set as default via environment variable
 export CURSOR_INSTALL_MODE=extracted
-cursor --update stable
+cursor-installer --update stable
 ```
 
 **Note:** The extracted installation is stored in `~/.local/share/cursor/`.

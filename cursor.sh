@@ -2,19 +2,25 @@
 
 set -e
 
-# Color and logging helpers
-if [ -t 1 ]; then
-    BOLD="\033[1m"; RESET="\033[0m"
-    RED="\033[31m"; GREEN="\033[32m"; YELLOW="\033[33m"; BLUE="\033[34m"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+LIB_DIR="$HOME/.local/share/cursor-installer"
+LIB_PATH="$SCRIPT_DIR/lib.sh"
+SHARED_LIB="$LIB_DIR/lib.sh"
+
+# Source shared helpers (local repo or installed lib)
+if [ -f "$LIB_PATH" ]; then
+    # shellcheck disable=SC1090
+    source "$LIB_PATH"
+elif [ -f "$SHARED_LIB" ]; then
+    # shellcheck disable=SC1090
+    source "$SHARED_LIB"
 else
-    BOLD=""; RESET=""; RED=""; GREEN=""; YELLOW=""; BLUE=""
+    echo "Error: lib.sh not found. Reinstall using install.sh." >&2
+    exit 1
 fi
 
-log_info()  { echo -e "${BLUE}[*]${RESET} $*"; }
-log_ok()    { echo -e "${GREEN}[✓]${RESET} $*"; }
-log_warn()  { echo -e "${YELLOW}[!]${RESET} $*"; }
-log_error() { echo -e "${RED}[x]${RESET} $*"; }
-log_step()  { echo -e "${BOLD}$*${RESET}"; }
+CLI_NAME="cursor-installer"
+CLI_BIN="$HOME/.local/bin/$CLI_NAME"
 
 # Installation mode: 'appimage' (default) or 'extracted'
 # Can be set via CURSOR_INSTALL_MODE environment variable or --extract flag
@@ -264,7 +270,7 @@ function install_icons_from_source() {
 
 function create_launcher_script() {
     local extracted_root="$1"
-    local launcher_script="$HOME/.local/bin/cursor"
+    local launcher_script="$CLI_BIN"
     
     mkdir -p "$HOME/.local/bin"
     
@@ -406,7 +412,7 @@ function install_cursor_extracted() {
     mkdir -p "$apps_dir"
     if [ -f "$install_dir/cursor/cursor.desktop" ]; then
         if cp "$install_dir/cursor/cursor.desktop" "$apps_dir/"; then
-            sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/cursor --no-sandbox --open-url %U|" "$apps_dir/cursor.desktop"
+            sed -i "s|^Exec=.*|Exec=$CLI_BIN --no-sandbox --open-url %U|" "$apps_dir/cursor.desktop"
             sed -i 's/^Icon=co.anysphere.cursor/Icon=cursor/' "$apps_dir/cursor.desktop"
             
             # Fix MimeType
@@ -433,7 +439,7 @@ function install_cursor_extracted() {
     echo ""
     log_ok "Cursor $version has been extracted and installed to $install_dir/cursor"
     log_ok "No FUSE required - running as native application"
-    log_ok "Launcher script created at $HOME/.local/bin/cursor"
+    log_ok "Launcher script created at $CLI_BIN"
     if [ "$icons_installed" = true ] && [ "$desktop_installed" = true ]; then
         log_ok "Icons and desktop file installed"
     elif [ "$icons_installed" = true ]; then
@@ -616,7 +622,7 @@ function reinstall_desktop_file() {
         fi
         cp "$src_desktop" "$apps_dir/"
         # Set Exec to launcher script
-        sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/cursor --no-sandbox --open-url %U|" "$apps_dir/cursor.desktop"
+        sed -i "s|^Exec=.*|Exec=$CLI_BIN --no-sandbox --open-url %U|" "$apps_dir/cursor.desktop"
     else
         # Fall back to AppImage installation
         local cursor_appimage
@@ -829,7 +835,11 @@ case "$1" in
         get_version
         exit $?
         ;;
-    --update)
+    --check|-c)
+        check_cursor_versions
+        exit $?
+        ;;
+    --update|-u)
         update_cursor "$2"
         exit $?
         ;;
@@ -837,7 +847,7 @@ case "$1" in
         # Enable extracted installation mode
         INSTALL_MODE="extracted"
         shift
-        if [ "$1" == "--update" ]; then
+        if [ "$1" == "--update" ] || [ "$1" == "-u" ]; then
             update_cursor "$2"
         else
             # Install in extracted mode
@@ -852,11 +862,12 @@ case "$1" in
         ;;
     --help|-h)
         cat << 'HELP'
-Usage: cursor [OPTIONS] [ARGUMENTS]
+Usage: cursor-installer [OPTIONS] [ARGUMENTS]
 
 Options:
   --version, -v           Show the installed version of Cursor
-  --update [stable|latest] Update Cursor to the specified release track
+  --check, -c             Show stable and latest available versions
+  --update, -u [stable|latest] Update Cursor to the specified release track
   --extract, --no-fuse    Install/update Cursor in extracted mode (no FUSE required)
   --reinstall-desktop     Reinstall only the desktop entry for debugging
   --help, -h              Show this help message
@@ -867,10 +878,11 @@ Installation Modes:
                           Useful for systems without FUSE support or restricted environments
 
 Examples:
-  cursor                        Launch Cursor
-  cursor --update stable        Update to stable release
-  cursor --extract --update     Install/update in extracted mode (no FUSE)
-  cursor --version              Show installed version
+  cursor-installer                        Launch Cursor
+  cursor-installer --check               Show latest and stable versions
+  cursor-installer --update stable        Update to stable release
+  cursor-installer --extract --update     Install/update in extracted mode (no FUSE)
+  cursor-installer --version              Show installed version
 
 Environment Variables:
   CURSOR_INSTALL_MODE     Set to 'extracted' to use extracted mode by default
