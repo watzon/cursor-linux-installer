@@ -35,22 +35,6 @@ LEGACY_CLI="$HOME/.local/bin/cursor"
 
 log_step "Uninstalling Cursor..."
 
-# Function to find the Cursor AppImage
-function find_cursor_appimage() {
-    local search_dirs=("$HOME/AppImages" "$HOME/Applications" "$HOME/.local/bin")
-    for dir in "${search_dirs[@]}"; do
-        local appimage
-        if [ -d "$dir" ]; then
-            appimage=$(find "$dir" -name "cursor.appimage" -print -quit 2>/dev/null || true)
-            if [ -n "$appimage" ]; then
-                echo "$appimage"
-                return 0
-            fi
-        fi
-    done
-    return 1
-}
-
 # Remove the Cursor AppImage
 cursor_appimage=$(find_cursor_appimage)
 if [ -n "$cursor_appimage" ]; then

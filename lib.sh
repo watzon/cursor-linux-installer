@@ -88,3 +88,19 @@ function safe_remove() {
     
     return 0
 }
+
+# Find the installed Cursor AppImage path (if any)
+function find_cursor_appimage() {
+    local search_dirs=("$HOME/.local/bin" "$HOME/AppImages" "$HOME/Applications")
+    for dir in "${search_dirs[@]}"; do
+        # Skip non-existent directories to avoid 'find' non-zero status with set -e
+        [ -d "$dir" ] || continue
+        local appimage
+        appimage=$(find "$dir" -name "cursor.appimage" -print -quit 2>/dev/null || true)
+        if [ -n "$appimage" ]; then
+            echo "$appimage"
+            return 0
+        fi
+    done
+    return 1
+}
