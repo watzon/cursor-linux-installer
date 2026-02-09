@@ -811,6 +811,18 @@ function get_version() {
     fi
 }
 
+function check_cursor_versions() {
+    local stable_info=$(get_download_info "stable")
+    local stable_version=$(echo "$stable_info" | grep "VERSION=" | sed 's/^VERSION=//')
+    local latest_info=$(get_download_info "latest")
+    local latest_version=$(echo "$latest_info" | grep "VERSION=" | sed 's/^VERSION=//')
+    echo "Stable Version: $stable_version"
+    echo "Latest Version: $latest_version"
+    echo "--------------------------------"
+    get_version
+    return 0
+}
+
 # Parse command-line arguments
 case "$1" in
     --version|-v)
