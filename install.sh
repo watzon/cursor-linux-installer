@@ -69,13 +69,26 @@ CLI_NAME="cursor-installer"
 CLI_PATH="$LOCAL_BIN/$CLI_NAME"
 LEGACY_CLI="$LOCAL_BIN/cursor"
 
+function is_legacy_installer_cli() {
+    local file_path="$1"
+    if [ ! -f "$file_path" ]; then
+        return 1
+    fi
+
+    grep -qE 'install_cursor|check_cursor_versions|cursor\.appimage|Cursor Linux Installer' "$file_path"
+}
+
 # Create ~/.local/bin if it doesn't exist
 mkdir -p "$LOCAL_BIN"
 
 # Remove legacy installer CLI if present to avoid conflicts
-if [ -f "$LEGACY_CLI" ] && grep -q "install_cursor_extracted" "$LEGACY_CLI"; then
-    log_warn "Removing legacy 'cursor' installer CLI to avoid conflicts."
-    safe_remove "$LEGACY_CLI" "legacy cursor installer CLI"
+if [ -f "$LEGACY_CLI" ]; then
+    if is_legacy_installer_cli "$LEGACY_CLI"; then
+        log_warn "Removing legacy 'cursor' installer CLI to avoid conflicts."
+        safe_remove "$LEGACY_CLI" "legacy cursor installer CLI"
+    else
+        log_info "Existing '$LEGACY_CLI' does not appear installer-managed; leaving it untouched."
+    fi
 fi
 
 # Place cursor-installer CLI into ~/.local/bin from local file or GitHub
@@ -112,4 +125,3 @@ else
 fi
 
 log_ok "Installation complete. You can now run '$CLI_NAME' to start Cursor."
-

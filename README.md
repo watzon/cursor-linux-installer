@@ -50,6 +50,11 @@ The one‑liner script will:
 - Install FUSE2 manually: `sudo apt-get install libfuse2` (Debian/Ubuntu), `sudo dnf install fuse` (Fedora), or `sudo pacman -S fuse2` (Arch)
 - Use extracted mode: `curl -fsSL https://raw.githubusercontent.com/watzon/cursor-linux-installer/main/install.sh | bash -s -- stable --extract`
 
+If automated downloads are blocked by Cloudflare in your region, you can use one of these overrides:
+
+- `CURSOR_DOWNLOAD_URL=<direct-appimage-url> cursor-installer --update stable`
+- `CURSOR_APPIMAGE_PATH=/path/to/Cursor-<version>.AppImage cursor-installer --update stable`
+
 ### Method 2: Local clone
 
 ```bash
@@ -129,6 +134,8 @@ The uninstall script will:
 ## Usage
 
 Note: The installer CLI is `cursor-installer` to avoid conflicts with Cursor's official `cursor` CLI.
+
+During install, the script now removes only legacy installer-managed `~/.local/bin/cursor` scripts and leaves non-installer `cursor` executables untouched.
 
 After installation, you can use the `cursor-installer` command to launch Cursor or update it:
 
