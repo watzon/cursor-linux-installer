@@ -43,7 +43,8 @@ The one‑liner script will:
 1. Download the `cursor.sh` script and save it as `cursor-installer` in `~/.local/bin/`
 2. Download `lib.sh` to `~/.local/share/cursor-installer/lib.sh`
 3. Make the script executable
-4. Download and install the latest version of Cursor
+4. Install a `cursor` shim at `~/.local/bin/cursor` (see [The `cursor` Shim](#the-cursor-shim))
+5. Download and install the latest version of Cursor
 
 **Note:** If you're installing via the piped bash method and don't have FUSE2 installed, the script will warn you but continue. You'll need to either:
 
@@ -126,6 +127,8 @@ The uninstall script will:
 3. Remove the Cursor AppImage
 4. Ask if you want to remove the Cursor configuration files
 
+**Note:** The `cursor` shim at `~/.local/bin/cursor` is not removed by the uninstall script. See [Removing the Shim](#removing-the-shim) for manual cleanup.
+
 ## Usage
 
 Note: The installer CLI is `cursor-installer` to avoid conflicts with Cursor's official `cursor` CLI.
@@ -195,6 +198,69 @@ cursor-installer --update stable
 ```
 
 **Note:** The extracted installation is stored in `~/.local/share/cursor/`.
+
+## The `cursor` Shim
+
+### Why
+
+Cursor now ships an official `cursor` CLI, but this project predates it. The installer CLI is named `cursor-installer` to avoid colliding with the official binary. On systems where Cursor was installed through this project alone, there may be no `cursor` command on PATH.
+
+The shim bridges that gap. It installs a lightweight script at `~/.local/bin/cursor` that transparently forwards to the real Cursor CLI when present, and falls back to `cursor-installer` when it isn't.
+
+### What It Does
+
+When you type `cursor`, the shim (`~/.local/bin/cursor`) follows a short resolution chain:
+
+1. **Real Cursor binary found in PATH?** -- Forward all arguments to it (e.g. Cursor's official `cursor` CLI).
+2. **`cursor agent` subcommand?** -- Delegate to `~/.local/bin/agent` if it exists.
+3. **`cursor-installer` found?** -- Delegate to the installer CLI so commands like `cursor --update` still work.
+4. **Nothing found** -- Print a helpful error with install instructions.
+
+The shim never hides a real Cursor binary; it only acts as a fallback.
+
+### How It Works
+
+Two scripts cooperate:
+
+| File | Purpose |
+| --- | --- |
+| `shim.sh` | The shim itself, installed as `~/.local/bin/cursor`. |
+| `scripts/ensure-shim.sh` | Idempotent installer/updater for the shim. |
+
+**`ensure-shim.sh` safety guards:**
+
+- If `~/.local/bin/cursor` does not exist, the shim is installed.
+- If it exists and is already the current shim (byte-identical), nothing happens.
+- If it exists and _is_ a shim (detected by shebang + marker string), it is updated.
+- If it exists and is _not_ a shim (e.g. a real Cursor binary, a symlink you created, etc.), **it is never overwritten**.
+
+### When It Runs
+
+The shim is synced automatically during normal installer operations:
+
+- **`install.sh`** -- Copies `shim.sh` and `ensure-shim.sh` into `~/.local/share/cursor-installer/`, then runs `ensure-shim.sh`.
+- **`cursor-installer --update`** -- Re-downloads the latest shim assets from GitHub, then re-runs `ensure-shim.sh`.
+- **`cursor-installer` (install paths)** -- Runs `ensure-shim.sh` before each install to keep the shim current.
+
+### File Locations
+
+| Path | Description |
+| --- | --- |
+| `~/.local/bin/cursor` | The shim (what you invoke). |
+| `~/.local/share/cursor-installer/shim.sh` | Cached copy of the shim source. |
+| `~/.local/share/cursor-installer/ensure-shim.sh` | Cached copy of the installer helper. |
+
+### Removing the Shim
+
+The uninstall script does not currently remove the shim. To remove it manually:
+
+```bash
+rm ~/.local/bin/cursor
+rm -f ~/.local/share/cursor-installer/shim.sh
+rm -f ~/.local/share/cursor-installer/ensure-shim.sh
+```
+
+If you only want to disable the shim without uninstalling the rest of the project, removing `~/.local/bin/cursor` is sufficient.
 
 ## Note
 

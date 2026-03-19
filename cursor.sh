@@ -40,7 +40,7 @@ function get_extracted_root() {
         fi
     done
     return 1
-} 
+}
 
 function get_extraction_dir() {
     # Prefer ~/.local/share/cursor for extracted installations
@@ -289,6 +289,7 @@ EOF
 }
 
 function install_cursor_extracted() {
+    run_ensure_shim
     local install_dir="$1"
     local release_track=${2:-stable}
     local temp_file
@@ -438,6 +439,7 @@ function install_cursor_extracted() {
 }
 
 function install_cursor() {
+    run_ensure_shim
     local install_dir="$1"
     local release_track=${2:-stable} # Default to stable if not specified
     
@@ -663,6 +665,7 @@ EOF
 
 function update_cursor() {
     log_step "Updating Cursor..."
+    refresh_shim_assets
     local current_appimage
     current_appimage=$(find_cursor_appimage || true)
     local install_dir

@@ -104,3 +104,59 @@ function find_cursor_appimage() {
     done
     return 1
 }
+
+# --- Shim (cursor in PATH): canonical paths and helpers ---
+# Requires LIB_DIR to be set by caller before sourcing lib.
+REPO_OWNER="${REPO_OWNER:-watzon}"
+REPO_BRANCH="${REPO_BRANCH:-main}"
+REPO_NAME="${REPO_NAME:-cursor-linux-installer}"
+BASE_RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}"
+SHIM_TARGET="${SHIM_TARGET:-$HOME/.local/bin/cursor}"
+SHARED_SHIM="${LIB_DIR}/shim.sh"
+SHIM_HELPER="${LIB_DIR}/ensure-shim.sh"
+SHIM_URL="${BASE_RAW_URL}/shim.sh"
+SHIM_HELPER_URL="${BASE_RAW_URL}/scripts/ensure-shim.sh"
+LIB_URL="${BASE_RAW_URL}/lib.sh"
+CURSOR_SCRIPT_URL="${BASE_RAW_URL}/cursor.sh"
+
+# Sync shim.sh and ensure-shim.sh into LIB_DIR (local copy or download).
+# Set LOCAL_SHIM_PATH and/or LOCAL_SHIM_HELPER_PATH to prefer repo files.
+function sync_shim_assets() {
+    mkdir -p "$LIB_DIR"
+    if [ -n "${LOCAL_SHIM_PATH:-}" ] && [ -f "$LOCAL_SHIM_PATH" ]; then
+        cp "$LOCAL_SHIM_PATH" "$SHARED_SHIM"
+    elif [ ! -f "$SHARED_SHIM" ]; then
+        curl -fsSL "$SHIM_URL" -o "$SHARED_SHIM" || { log_warn "Failed to download shim.sh"; return 1; }
+    fi
+    if [ -n "${LOCAL_SHIM_HELPER_PATH:-}" ] && [ -f "$LOCAL_SHIM_HELPER_PATH" ]; then
+        cp "$LOCAL_SHIM_HELPER_PATH" "$SHIM_HELPER"
+    elif [ ! -f "$SHIM_HELPER" ]; then
+        curl -fsSL "$SHIM_HELPER_URL" -o "$SHIM_HELPER" || { log_warn "Failed to download ensure-shim.sh"; return 1; }
+    fi
+    chmod +x "$SHIM_HELPER" "$SHARED_SHIM" 2>/dev/null || true
+    return 0
+}
+
+# Refresh shim assets from GitHub (used on cursor-installer --update).
+function refresh_shim_assets() {
+    log_step "Refreshing cursor shim assets..."
+    mkdir -p "$LIB_DIR"
+    if ! curl -fsSL "$SHIM_URL" -o "$SHARED_SHIM"; then
+        log_warn "Failed to download shim.sh; continuing."
+        return 0
+    fi
+    if ! curl -fsSL "$SHIM_HELPER_URL" -o "$SHIM_HELPER"; then
+        log_warn "Failed to download ensure-shim.sh; continuing."
+        return 0
+    fi
+    chmod +x "$SHIM_HELPER" "$SHARED_SHIM" 2>/dev/null || true
+}
+
+# Run ensure-shim.sh with canonical SOURCE_SHIM and TARGET_SHIM.
+function run_ensure_shim() {
+    if [ ! -x "$SHIM_HELPER" ] && [ ! -f "$SHIM_HELPER" ]; then
+        log_info "Shim helper not found; skipping shim update."
+        return 0
+    fi
+    SOURCE_SHIM="$SHARED_SHIM" TARGET_SHIM="$SHIM_TARGET" "$SHIM_HELPER" || { log_warn "Shim update failed; continuing."; return 0; }
+}

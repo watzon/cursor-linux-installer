@@ -32,17 +32,15 @@ done
 # Determine whether to use local cursor.sh or download from GitHub
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 LOCAL_CURSOR_SH="$SCRIPT_DIR/cursor.sh"
-
-# Repo URL parameters (override via env for release workflows)
+LIB_DIR="$HOME/.local/share/cursor-installer"
+LIB_PATH="$SCRIPT_DIR/lib.sh"
+SHARED_LIB="$LIB_DIR/lib.sh"
 REPO_OWNER=${REPO_OWNER:-watzon}
 REPO_BRANCH=${REPO_BRANCH:-main}
 REPO_NAME=${REPO_NAME:-cursor-linux-installer}
 BASE_RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}"
-CURSOR_SCRIPT_URL="$BASE_RAW_URL/cursor.sh"
-LIB_DIR="$HOME/.local/share/cursor-installer"
-LIB_PATH="$SCRIPT_DIR/lib.sh"
-SHARED_LIB="$LIB_DIR/lib.sh"
-LIB_URL="$BASE_RAW_URL/lib.sh"
+LIB_URL="${BASE_RAW_URL}/lib.sh"
+CURSOR_SCRIPT_URL="${BASE_RAW_URL}/cursor.sh"
 
 # Source shared helpers (local repo, installed lib, or download)
 if [ -f "$LIB_PATH" ]; then
@@ -95,6 +93,9 @@ fi
 chmod +x "$CLI_PATH"
 
 log_ok "Cursor installer script has been placed in $CLI_PATH"
+
+log_step "Ensuring cursor shim..."
+LOCAL_SHIM_PATH="$SCRIPT_DIR/shim.sh" LOCAL_SHIM_HELPER_PATH="$SCRIPT_DIR/scripts/ensure-shim.sh" sync_shim_assets && run_ensure_shim || log_warn "Shim update skipped or failed; continuing."
 
 # Check if ~/.local/bin is in PATH
 if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
