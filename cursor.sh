@@ -213,6 +213,69 @@ function get_download_info() {
     return 0
 }
 
+function downloaded_file_looks_like_appimage() {
+    local file_path="$1"
+    if [ ! -s "$file_path" ]; then
+        return 1
+    fi
+
+    local file_info
+    file_info=$(file -b "$file_path" 2>/dev/null || true)
+    if echo "$file_info" | grep -qiE 'HTML|XML|ASCII text|Unicode text'; then
+        return 1
+    fi
+
+    local first_bytes
+    first_bytes=$(head -c 256 "$file_path" 2>/dev/null || true)
+    if echo "$first_bytes" | grep -qiE '<!doctype html|<html|<head|<body'; then
+        return 1
+    fi
+
+    return 0
+}
+
+function download_cursor_appimage() {
+    local default_url="$1"
+    local output_file="$2"
+    local source_file="${CURSOR_APPIMAGE_PATH:-}"
+    local download_url="${CURSOR_DOWNLOAD_URL:-$default_url}"
+
+    if [ -n "$source_file" ]; then
+        if [ ! -f "$source_file" ]; then
+            log_error "CURSOR_APPIMAGE_PATH is set, but file was not found: $source_file"
+            return 1
+        fi
+
+        log_step "Using local AppImage from CURSOR_APPIMAGE_PATH"
+        cp "$source_file" "$output_file"
+        return 0
+    fi
+
+    local browser_ua='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+
+    log_step "Downloading Cursor AppImage..."
+    if curl -fL --retry 3 --retry-delay 2 --retry-all-errors "$download_url" -o "$output_file" && downloaded_file_looks_like_appimage "$output_file"; then
+        return 0
+    fi
+
+    log_warn "Retrying download with browser-like headers (Cloudflare fallback)..."
+    if curl -fL --retry 5 --retry-delay 2 --retry-all-errors --compressed \
+        -A "$browser_ua" \
+        -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
+        -H 'Referer: https://cursor.com/downloads' \
+        -H 'Cache-Control: no-cache' \
+        "$download_url" -o "$output_file" && downloaded_file_looks_like_appimage "$output_file"; then
+        return 0
+    fi
+
+    rm -f "$output_file"
+    log_error "Failed to download a valid Cursor AppImage from: $download_url"
+    log_info "If Cloudflare blocks automated download in your region, download it in a browser and run:"
+    log_info "  CURSOR_APPIMAGE_PATH=/path/to/Cursor-<version>.AppImage $CLI_NAME --update stable"
+    log_info "You can also override the URL with CURSOR_DOWNLOAD_URL=<direct-appimage-url>."
+    return 1
+}
+
 function clean_broken_cursor_symlinks() {
     local relative_path="$1"
     local target_root="$2"
@@ -313,7 +376,7 @@ function install_cursor_extracted() {
     version=$(echo "$download_info" | grep "VERSION=" | sed 's/^VERSION=//')
 
     log_step "Downloading $version Cursor AppImage for extraction..."
-    if ! curl -L "$download_url" -o "$temp_file"; then
+    if ! download_cursor_appimage "$download_url" "$temp_file"; then
         log_error "Failed to download Cursor AppImage"
         rm -f "$temp_file"
         return 1
@@ -478,7 +541,7 @@ function install_cursor() {
     version=$(echo "$download_info" | grep "VERSION=" | sed 's/^VERSION=//')
 
     log_step "Downloading $version Cursor AppImage..."
-    if ! curl -L "$download_url" -o "$temp_file"; then
+    if ! download_cursor_appimage "$download_url" "$temp_file"; then
         log_error "Failed to download Cursor AppImage"
         rm -f "$temp_file"
         return 1
