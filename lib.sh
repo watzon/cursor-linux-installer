@@ -114,8 +114,12 @@ BASE_RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REP
 SHIM_TARGET="${SHIM_TARGET:-$HOME/.local/bin/cursor}"
 SHARED_SHIM="${LIB_DIR}/shim.sh"
 SHIM_HELPER="${LIB_DIR}/ensure-shim.sh"
+SHELL_PATH_SCRIPT="${LIB_DIR}/shell-path.sh"
+SHELL_PATH_HELPER="${LIB_DIR}/ensure-shell-path.sh"
 SHIM_URL="${BASE_RAW_URL}/shim.sh"
 SHIM_HELPER_URL="${BASE_RAW_URL}/scripts/ensure-shim.sh"
+SHELL_PATH_SCRIPT_URL="${BASE_RAW_URL}/shell-path.sh"
+SHELL_PATH_HELPER_URL="${BASE_RAW_URL}/scripts/ensure-shell-path.sh"
 LIB_URL="${BASE_RAW_URL}/lib.sh"
 CURSOR_SCRIPT_URL="${BASE_RAW_URL}/cursor.sh"
 
@@ -137,6 +141,22 @@ function sync_shim_assets() {
     return 0
 }
 
+function sync_shell_path_assets() {
+    mkdir -p "$LIB_DIR"
+    if [ -n "${LOCAL_SHELL_PATH_SCRIPT:-}" ] && [ -f "$LOCAL_SHELL_PATH_SCRIPT" ]; then
+        cp "$LOCAL_SHELL_PATH_SCRIPT" "$SHELL_PATH_SCRIPT"
+    elif [ ! -f "$SHELL_PATH_SCRIPT" ]; then
+        curl -fsSL "$SHELL_PATH_SCRIPT_URL" -o "$SHELL_PATH_SCRIPT" || { log_warn "Failed to download shell-path.sh"; return 1; }
+    fi
+    if [ -n "${LOCAL_SHELL_PATH_HELPER_PATH:-}" ] && [ -f "$LOCAL_SHELL_PATH_HELPER_PATH" ]; then
+        cp "$LOCAL_SHELL_PATH_HELPER_PATH" "$SHELL_PATH_HELPER"
+    elif [ ! -f "$SHELL_PATH_HELPER" ]; then
+        curl -fsSL "$SHELL_PATH_HELPER_URL" -o "$SHELL_PATH_HELPER" || { log_warn "Failed to download ensure-shell-path.sh"; return 1; }
+    fi
+    chmod +x "$SHELL_PATH_HELPER" "$SHELL_PATH_SCRIPT" 2>/dev/null || true
+    return 0
+}
+
 # Refresh shim assets from GitHub (used on cursor-installer --update).
 function refresh_shim_assets() {
     log_step "Refreshing cursor shim assets..."
@@ -152,11 +172,52 @@ function refresh_shim_assets() {
     chmod +x "$SHIM_HELPER" "$SHARED_SHIM" 2>/dev/null || true
 }
 
+function refresh_shell_path_assets() {
+    log_step "Refreshing shell PATH assets..."
+    mkdir -p "$LIB_DIR"
+    if ! curl -fsSL "$SHELL_PATH_SCRIPT_URL" -o "$SHELL_PATH_SCRIPT"; then
+        log_warn "Failed to download shell-path.sh; continuing."
+        return 0
+    fi
+    if ! curl -fsSL "$SHELL_PATH_HELPER_URL" -o "$SHELL_PATH_HELPER"; then
+        log_warn "Failed to download ensure-shell-path.sh; continuing."
+        return 0
+    fi
+    chmod +x "$SHELL_PATH_HELPER" "$SHELL_PATH_SCRIPT" 2>/dev/null || true
+}
+
 # Run ensure-shim.sh with canonical SOURCE_SHIM and TARGET_SHIM.
 function run_ensure_shim() {
-    if [ ! -x "$SHIM_HELPER" ] && [ ! -f "$SHIM_HELPER" ]; then
+    if [ ! -f "$SHIM_HELPER" ]; then
         log_info "Shim helper not found; skipping shim update."
         return 0
     fi
-    SOURCE_SHIM="$SHARED_SHIM" TARGET_SHIM="$SHIM_TARGET" "$SHIM_HELPER" || { log_warn "Shim update failed; continuing."; return 0; }
+    SOURCE_SHIM="$SHARED_SHIM" TARGET_SHIM="$SHIM_TARGET" sh "$SHIM_HELPER" || { log_warn "Shim update failed; continuing."; return 0; }
+}
+
+function run_ensure_shell_path() {
+    if [ ! -f "$SHELL_PATH_HELPER" ] || [ ! -f "$SHELL_PATH_SCRIPT" ]; then
+        log_info "Shell PATH helper not found; skipping shell PATH setup."
+        return 0
+    fi
+    SHELL_PATH_SCRIPT="$SHELL_PATH_SCRIPT" sh "$SHELL_PATH_HELPER" || { log_warn "Shell PATH setup failed; continuing."; return 0; }
+}
+
+function run_remove_shell_path() {
+    if [ ! -f "$SHELL_PATH_HELPER" ]; then
+        return 0
+    fi
+    SHELL_PATH_SCRIPT="$SHELL_PATH_SCRIPT" sh "$SHELL_PATH_HELPER" --remove || { log_warn "Shell PATH cleanup failed; continuing."; return 0; }
+}
+
+function warn_if_cursor_shadowed_by_appimage_runtime() {
+    local resolved_cursor
+    resolved_cursor=$(command -v cursor 2>/dev/null || true)
+
+    case "$resolved_cursor" in
+        /tmp/.mount_*)
+            log_warn "The current shell resolves 'cursor' to Cursor's AppImage runtime path."
+            log_info "Open a new terminal or source your shell startup file so ~/.local/bin takes precedence."
+            ;;
+    esac
 }
