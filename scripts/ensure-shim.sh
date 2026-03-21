@@ -5,6 +5,7 @@ set -eu
 TARGET_SHIM="${TARGET_SHIM:-$HOME/.local/bin/cursor}"
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 LIB_DIR="${HOME}/.local/share/cursor-installer"
+SHIM_MARKER="cursor-linux-installer-shim"
 
 SOURCE_SHIM="${SOURCE_SHIM:-}"
 if [ -z "$SOURCE_SHIM" ]; then
@@ -36,12 +37,17 @@ is_shim() {
       return 1
       ;;
   esac
-  if grep -q "Find cursor executable in PATH" "$file" 2>/dev/null; then
+
+  if grep -Fq "$SHIM_MARKER" "$file" 2>/dev/null; then
     return 0
   fi
-  if grep -q "cursor-installer" "$file" 2>/dev/null; then
+
+  if grep -Fq "Find cursor executable in PATH" "$file" 2>/dev/null &&
+    grep -Fq 'AGENT_BIN="$HOME/.local/bin/agent"' "$file" 2>/dev/null &&
+    grep -Fq 'Install/update with: cursor-installer --update [stable|latest]' "$file" 2>/dev/null; then
     return 0
   fi
+
   return 1
 }
 

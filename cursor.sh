@@ -290,6 +290,7 @@ EOF
 
 function install_cursor_extracted() {
     run_ensure_shim
+    run_ensure_shell_path
     local install_dir="$1"
     local release_track=${2:-stable}
     local temp_file
@@ -440,6 +441,7 @@ function install_cursor_extracted() {
 
 function install_cursor() {
     run_ensure_shim
+    run_ensure_shell_path
     local install_dir="$1"
     local release_track=${2:-stable} # Default to stable if not specified
     
@@ -666,6 +668,10 @@ EOF
 function update_cursor() {
     log_step "Updating Cursor..."
     refresh_shim_assets
+    refresh_shell_path_assets
+    run_ensure_shim
+    run_ensure_shell_path
+    warn_if_cursor_shadowed_by_appimage_runtime
     local current_appimage
     current_appimage=$(find_cursor_appimage || true)
     local install_dir

@@ -48,7 +48,15 @@ fi
 log_step "Removing cursor-installer script..."
 safe_remove "$CLI_PATH" "cursor-installer script"
 
-# Remove shared lib (installed by installer)
+# Remove managed shell PATH setup before deleting helper assets
+log_step "Removing managed shell PATH setup..."
+run_remove_shell_path
+
+# Remove shared support assets (installed by installer)
+safe_remove "$SHARED_SHIM" "cursor shim source"
+safe_remove "$SHIM_HELPER" "cursor shim helper"
+safe_remove "$SHELL_PATH_SCRIPT" "shell PATH helper script"
+safe_remove "$SHELL_PATH_HELPER" "shell PATH helper"
 safe_remove "$SHARED_LIB" "cursor-installer lib"
 if [ -d "$LIB_DIR" ] && [ -z "$(ls -A "$LIB_DIR")" ]; then
     rmdir "$LIB_DIR" 2>/dev/null || true

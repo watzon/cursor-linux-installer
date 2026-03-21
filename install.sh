@@ -94,8 +94,12 @@ chmod +x "$CLI_PATH"
 
 log_ok "Cursor installer script has been placed in $CLI_PATH"
 
-log_step "Ensuring cursor shim..."
-LOCAL_SHIM_PATH="$SCRIPT_DIR/shim.sh" LOCAL_SHIM_HELPER_PATH="$SCRIPT_DIR/scripts/ensure-shim.sh" sync_shim_assets && run_ensure_shim || log_warn "Shim update skipped or failed; continuing."
+log_step "Ensuring cursor shim and shell PATH setup..."
+LOCAL_SHIM_PATH="$SCRIPT_DIR/shim.sh"
+LOCAL_SHIM_HELPER_PATH="$SCRIPT_DIR/scripts/ensure-shim.sh"
+LOCAL_SHELL_PATH_SCRIPT="$SCRIPT_DIR/shell-path.sh"
+LOCAL_SHELL_PATH_HELPER_PATH="$SCRIPT_DIR/scripts/ensure-shell-path.sh"
+sync_shim_assets && sync_shell_path_assets && run_ensure_shim && run_ensure_shell_path || log_warn "Shim or shell PATH setup skipped or failed; continuing."
 
 # Check if ~/.local/bin is in PATH
 if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
@@ -103,6 +107,7 @@ if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
     log_info "To add it, run this or add it to your shell profile:"
     log_info "export PATH=\"\$HOME/.local/bin:\$PATH\""
 fi
+warn_if_cursor_shadowed_by_appimage_runtime
 
 # Run cursor --update to download and install Cursor
 log_step "Downloading and installing Cursor ($INSTALL_MODE mode) from ${REPO_OWNER}/${REPO_NAME}@${REPO_BRANCH}..."
