@@ -67,6 +67,19 @@ strip_managed_block() {
   fi
 }
 
+write_updated_file() {
+  tmp="$1"
+  file="$2"
+
+  if [ -e "$file" ] || [ -L "$file" ]; then
+    cat "$tmp" > "$file"
+    rm -f "$tmp"
+    return 0
+  fi
+
+  mv "$tmp" "$file"
+}
+
 ensure_block() {
   file="$1"
   tmp=$(mktemp)
@@ -85,7 +98,7 @@ ensure_block() {
     return 0
   fi
 
-  mv "$tmp" "$file"
+  write_updated_file "$tmp" "$file"
   echo "Ensured shell PATH setup in $file"
 }
 
@@ -101,7 +114,7 @@ remove_block() {
     return 0
   fi
 
-  mv "$tmp" "$file"
+  write_updated_file "$tmp" "$file"
   echo "Removed shell PATH setup from $file"
 }
 
