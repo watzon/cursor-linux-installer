@@ -67,17 +67,37 @@ strip_managed_block() {
   fi
 }
 
-write_updated_file() {
-  tmp="$1"
-  file="$2"
+trim_trailing_blank_lines() {
+  trim_file="$1"
+  trimmed_file=$(mktemp)
 
-  if [ -e "$file" ] || [ -L "$file" ]; then
-    cat "$tmp" > "$file"
-    rm -f "$tmp"
+  awk '
+    { lines[NR] = $0 }
+    END {
+      last = NR
+      while (last > 0 && lines[last] ~ /^[[:space:]]*$/) {
+        last--
+      }
+      for (i = 1; i <= last; i++) {
+        print lines[i]
+      }
+    }
+  ' "$trim_file" > "$trimmed_file"
+
+  mv "$trimmed_file" "$trim_file"
+}
+
+write_updated_file() {
+  source_tmp="$1"
+  destination_file="$2"
+
+  if [ -e "$destination_file" ] || [ -L "$destination_file" ]; then
+    cat "$source_tmp" > "$destination_file"
+    rm -f "$source_tmp"
     return 0
   fi
 
-  mv "$tmp" "$file"
+  mv "$source_tmp" "$destination_file"
 }
 
 ensure_block() {
@@ -85,6 +105,7 @@ ensure_block() {
   tmp=$(mktemp)
   mkdir -p "$(dirname "$file")"
   strip_managed_block "$file" "$tmp"
+  trim_trailing_blank_lines "$tmp"
 
   if [ -s "$tmp" ]; then
     printf '\n' >> "$tmp"
