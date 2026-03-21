@@ -92,6 +92,7 @@ AGENT_BIN="$HOME/.local/bin/agent"
 
 if [ "$first_arg" = "agent" ]; then
   if [ -x "$AGENT_BIN" ]; then
+    shift
     exec "$AGENT_BIN" "$@"
   fi
   echo "Error: Cursor agent not found at $AGENT_BIN" 1>&2
