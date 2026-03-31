@@ -57,6 +57,7 @@ safe_remove "$SHARED_SHIM" "cursor shim source"
 safe_remove "$SHIM_HELPER" "cursor shim helper"
 safe_remove "$SHELL_PATH_SCRIPT" "shell PATH helper script"
 safe_remove "$SHELL_PATH_HELPER" "shell PATH helper"
+safe_remove "$INSTALLER_SOURCE_STATE" "installer source metadata"
 safe_remove "$SHARED_LIB" "cursor-installer lib"
 if [ -d "$LIB_DIR" ] && [ -z "$(ls -A "$LIB_DIR")" ]; then
     rmdir "$LIB_DIR" 2>/dev/null || true

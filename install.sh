@@ -94,6 +94,18 @@ chmod +x "$CLI_PATH"
 
 log_ok "Cursor installer script has been placed in $CLI_PATH"
 
+INSTALLER_SOURCE_ROOT=""
+if [ -f "$LOCAL_CURSOR_SH" ] && [ -f "$LIB_PATH" ]; then
+    INSTALLER_SOURCE_ROOT="$SCRIPT_DIR"
+    if command -v git >/dev/null 2>&1; then
+        DETECTED_REPO_BRANCH=$(git -C "$SCRIPT_DIR" branch --show-current 2>/dev/null || true)
+        if [ -n "$DETECTED_REPO_BRANCH" ]; then
+            REPO_BRANCH="$DETECTED_REPO_BRANCH"
+        fi
+    fi
+fi
+persist_installer_source_state "$INSTALLER_SOURCE_ROOT"
+
 log_step "Ensuring cursor shim and shell PATH setup..."
 LOCAL_SHIM_PATH="$SCRIPT_DIR/shim.sh"
 LOCAL_SHIM_HELPER_PATH="$SCRIPT_DIR/scripts/ensure-shim.sh"

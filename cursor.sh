@@ -6,11 +6,24 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 LIB_DIR="$HOME/.local/share/cursor-installer"
 LIB_PATH="$SCRIPT_DIR/lib.sh"
 SHARED_LIB="$LIB_DIR/lib.sh"
+INSTALLER_SOURCE_STATE="$LIB_DIR/source.env"
+LOCAL_LIB_PATH=""
 
-# Source shared helpers (local repo or installed lib)
+if [ -f "$INSTALLER_SOURCE_STATE" ]; then
+    # shellcheck disable=SC1090
+    source "$INSTALLER_SOURCE_STATE"
+    if [ -n "${INSTALLER_SOURCE_ROOT:-}" ] && [ -f "$INSTALLER_SOURCE_ROOT/lib.sh" ]; then
+        LOCAL_LIB_PATH="$INSTALLER_SOURCE_ROOT/lib.sh"
+    fi
+fi
+
+# Source shared helpers (local repo, persisted local source, or installed lib)
 if [ -f "$LIB_PATH" ]; then
     # shellcheck disable=SC1090
     source "$LIB_PATH"
+elif [ -n "$LOCAL_LIB_PATH" ]; then
+    # shellcheck disable=SC1090
+    source "$LOCAL_LIB_PATH"
 elif [ -f "$SHARED_LIB" ]; then
     # shellcheck disable=SC1090
     source "$SHARED_LIB"

@@ -105,11 +105,68 @@ function find_cursor_appimage() {
     return 1
 }
 
+# --- Installer source metadata ---
+INSTALLER_SOURCE_STATE="${LIB_DIR}/source.env"
+
+function load_installer_source_state() {
+    if [ ! -f "$INSTALLER_SOURCE_STATE" ]; then
+        return 0
+    fi
+
+    # shellcheck disable=SC1090
+    source "$INSTALLER_SOURCE_STATE"
+}
+
+function persist_installer_source_state() {
+    mkdir -p "$LIB_DIR"
+
+    local source_root="${1:-${INSTALLER_SOURCE_ROOT:-}}"
+    local tmp_file
+    tmp_file=$(mktemp)
+
+    {
+        printf 'INSTALLER_REPO_OWNER=%q\n' "${REPO_OWNER:-watzon}"
+        printf 'INSTALLER_REPO_BRANCH=%q\n' "${REPO_BRANCH:-main}"
+        printf 'INSTALLER_REPO_NAME=%q\n' "${REPO_NAME:-cursor-linux-installer}"
+
+        if [ -n "$source_root" ] && [ -d "$source_root" ]; then
+            printf 'INSTALLER_SOURCE_ROOT=%q\n' "$source_root"
+        fi
+    } > "$tmp_file"
+
+    mv "$tmp_file" "$INSTALLER_SOURCE_STATE"
+}
+
+function apply_local_installer_source_overrides() {
+    local source_root="${INSTALLER_SOURCE_ROOT:-}"
+
+    if [ -z "$source_root" ] || [ ! -d "$source_root" ]; then
+        return 0
+    fi
+
+    if [ -z "${LOCAL_CURSOR_SH:-}" ] && [ -f "$source_root/cursor.sh" ]; then
+        LOCAL_CURSOR_SH="$source_root/cursor.sh"
+    fi
+    if [ -z "${LOCAL_SHIM_PATH:-}" ] && [ -f "$source_root/shim.sh" ]; then
+        LOCAL_SHIM_PATH="$source_root/shim.sh"
+    fi
+    if [ -z "${LOCAL_SHIM_HELPER_PATH:-}" ] && [ -f "$source_root/scripts/ensure-shim.sh" ]; then
+        LOCAL_SHIM_HELPER_PATH="$source_root/scripts/ensure-shim.sh"
+    fi
+    if [ -z "${LOCAL_SHELL_PATH_SCRIPT:-}" ] && [ -f "$source_root/shell-path.sh" ]; then
+        LOCAL_SHELL_PATH_SCRIPT="$source_root/shell-path.sh"
+    fi
+    if [ -z "${LOCAL_SHELL_PATH_HELPER_PATH:-}" ] && [ -f "$source_root/scripts/ensure-shell-path.sh" ]; then
+        LOCAL_SHELL_PATH_HELPER_PATH="$source_root/scripts/ensure-shell-path.sh"
+    fi
+}
+
 # --- Shim (cursor in PATH): canonical paths and helpers ---
 # Requires LIB_DIR to be set by caller before sourcing lib.
-REPO_OWNER="${REPO_OWNER:-watzon}"
-REPO_BRANCH="${REPO_BRANCH:-main}"
-REPO_NAME="${REPO_NAME:-cursor-linux-installer}"
+load_installer_source_state
+REPO_OWNER="${REPO_OWNER:-${INSTALLER_REPO_OWNER:-watzon}}"
+REPO_BRANCH="${REPO_BRANCH:-${INSTALLER_REPO_BRANCH:-main}}"
+REPO_NAME="${REPO_NAME:-${INSTALLER_REPO_NAME:-cursor-linux-installer}}"
 BASE_RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}"
 SHIM_TARGET="${SHIM_TARGET:-$HOME/.local/bin/cursor}"
 SHARED_SHIM="${LIB_DIR}/shim.sh"
@@ -122,6 +179,7 @@ SHELL_PATH_SCRIPT_URL="${BASE_RAW_URL}/shell-path.sh"
 SHELL_PATH_HELPER_URL="${BASE_RAW_URL}/scripts/ensure-shell-path.sh"
 LIB_URL="${BASE_RAW_URL}/lib.sh"
 CURSOR_SCRIPT_URL="${BASE_RAW_URL}/cursor.sh"
+apply_local_installer_source_overrides
 
 # Sync shim.sh and ensure-shim.sh into LIB_DIR (local copy or download).
 # Set LOCAL_SHIM_PATH and/or LOCAL_SHIM_HELPER_PATH to prefer repo files.
@@ -161,11 +219,15 @@ function sync_shell_path_assets() {
 function refresh_shim_assets() {
     log_step "Refreshing cursor shim assets..."
     mkdir -p "$LIB_DIR"
-    if ! curl -fsSL "$SHIM_URL" -o "$SHARED_SHIM"; then
+    if [ -n "${LOCAL_SHIM_PATH:-}" ] && [ -f "$LOCAL_SHIM_PATH" ]; then
+        cp "$LOCAL_SHIM_PATH" "$SHARED_SHIM"
+    elif ! curl -fsSL "$SHIM_URL" -o "$SHARED_SHIM"; then
         log_warn "Failed to download shim.sh; continuing."
         return 0
     fi
-    if ! curl -fsSL "$SHIM_HELPER_URL" -o "$SHIM_HELPER"; then
+    if [ -n "${LOCAL_SHIM_HELPER_PATH:-}" ] && [ -f "$LOCAL_SHIM_HELPER_PATH" ]; then
+        cp "$LOCAL_SHIM_HELPER_PATH" "$SHIM_HELPER"
+    elif ! curl -fsSL "$SHIM_HELPER_URL" -o "$SHIM_HELPER"; then
         log_warn "Failed to download ensure-shim.sh; continuing."
         return 0
     fi
@@ -175,11 +237,15 @@ function refresh_shim_assets() {
 function refresh_shell_path_assets() {
     log_step "Refreshing shell PATH assets..."
     mkdir -p "$LIB_DIR"
-    if ! curl -fsSL "$SHELL_PATH_SCRIPT_URL" -o "$SHELL_PATH_SCRIPT"; then
+    if [ -n "${LOCAL_SHELL_PATH_SCRIPT:-}" ] && [ -f "$LOCAL_SHELL_PATH_SCRIPT" ]; then
+        cp "$LOCAL_SHELL_PATH_SCRIPT" "$SHELL_PATH_SCRIPT"
+    elif ! curl -fsSL "$SHELL_PATH_SCRIPT_URL" -o "$SHELL_PATH_SCRIPT"; then
         log_warn "Failed to download shell-path.sh; continuing."
         return 0
     fi
-    if ! curl -fsSL "$SHELL_PATH_HELPER_URL" -o "$SHELL_PATH_HELPER"; then
+    if [ -n "${LOCAL_SHELL_PATH_HELPER_PATH:-}" ] && [ -f "$LOCAL_SHELL_PATH_HELPER_PATH" ]; then
+        cp "$LOCAL_SHELL_PATH_HELPER_PATH" "$SHELL_PATH_HELPER"
+    elif ! curl -fsSL "$SHELL_PATH_HELPER_URL" -o "$SHELL_PATH_HELPER"; then
         log_warn "Failed to download ensure-shell-path.sh; continuing."
         return 0
     fi
