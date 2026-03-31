@@ -11,11 +11,24 @@ LIB_DIR="$HOME/.local/share/cursor-installer"
 LIB_PATH="$SCRIPT_DIR/lib.sh"
 SHARED_LIB="$LIB_DIR/lib.sh"
 LIB_URL="$BASE_RAW_URL/lib.sh"
+INSTALLER_SOURCE_STATE="$LIB_DIR/source.env"
+LOCAL_LIB_PATH=""
 
-# Source shared helpers (local repo, installed lib, or download)
+if [ -f "$INSTALLER_SOURCE_STATE" ]; then
+    # shellcheck disable=SC1090
+    source "$INSTALLER_SOURCE_STATE"
+    if [ -n "${INSTALLER_SOURCE_ROOT:-}" ] && [ -f "$INSTALLER_SOURCE_ROOT/lib.sh" ]; then
+        LOCAL_LIB_PATH="$INSTALLER_SOURCE_ROOT/lib.sh"
+    fi
+fi
+
+# Source shared helpers (local repo, persisted local source, installed lib, or download)
 if [ -f "$LIB_PATH" ]; then
     # shellcheck disable=SC1090
     source "$LIB_PATH"
+elif [ -n "$LOCAL_LIB_PATH" ]; then
+    # shellcheck disable=SC1090
+    source "$LOCAL_LIB_PATH"
 elif [ -f "$SHARED_LIB" ]; then
     # shellcheck disable=SC1090
     source "$SHARED_LIB"
@@ -29,6 +42,12 @@ else
     source "$SHARED_LIB"
 fi
 
+SHARED_SHIM="${SHARED_SHIM:-$LIB_DIR/shim.sh}"
+SHIM_HELPER="${SHIM_HELPER:-$LIB_DIR/ensure-shim.sh}"
+SHELL_PATH_SCRIPT="${SHELL_PATH_SCRIPT:-$LIB_DIR/shell-path.sh}"
+SHELL_PATH_HELPER="${SHELL_PATH_HELPER:-$LIB_DIR/ensure-shell-path.sh}"
+INSTALLER_SOURCE_STATE="${INSTALLER_SOURCE_STATE:-$LIB_DIR/source.env}"
+
 CLI_NAME="cursor-installer"
 CLI_PATH="$HOME/.local/bin/$CLI_NAME"
 LEGACY_CLI="$HOME/.local/bin/cursor"
@@ -36,7 +55,7 @@ LEGACY_CLI="$HOME/.local/bin/cursor"
 log_step "Uninstalling Cursor..."
 
 # Remove the Cursor AppImage
-cursor_appimage=$(find_cursor_appimage)
+cursor_appimage=$(find_cursor_appimage || true)
 if [ -n "$cursor_appimage" ]; then
     log_step "Removing Cursor AppImage..."
     safe_remove "$cursor_appimage" "Cursor AppImage"
@@ -48,7 +67,20 @@ fi
 log_step "Removing cursor-installer script..."
 safe_remove "$CLI_PATH" "cursor-installer script"
 
-# Remove shared lib (installed by installer)
+# Remove managed shell PATH setup before deleting helper assets
+log_step "Removing managed shell PATH setup..."
+if declare -F run_remove_shell_path >/dev/null 2>&1; then
+    run_remove_shell_path
+else
+    log_info "Shell PATH cleanup helper unavailable; skipping managed shell PATH setup removal."
+fi
+
+# Remove shared support assets (installed by installer)
+safe_remove "$SHARED_SHIM" "cursor shim source"
+safe_remove "$SHIM_HELPER" "cursor shim helper"
+safe_remove "$SHELL_PATH_SCRIPT" "shell PATH helper script"
+safe_remove "$SHELL_PATH_HELPER" "shell PATH helper"
+safe_remove "$INSTALLER_SOURCE_STATE" "installer source metadata"
 safe_remove "$SHARED_LIB" "cursor-installer lib"
 if [ -d "$LIB_DIR" ] && [ -z "$(ls -A "$LIB_DIR")" ]; then
     rmdir "$LIB_DIR" 2>/dev/null || true

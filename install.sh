@@ -42,15 +42,14 @@ BASE_RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REP
 LIB_URL="${BASE_RAW_URL}/lib.sh"
 CURSOR_SCRIPT_URL="${BASE_RAW_URL}/cursor.sh"
 
-# Source shared helpers (local repo, installed lib, or download)
+# Source shared helpers (local repo or freshly downloaded lib).
+# Standalone installs must not rely on a potentially stale shared lib, because
+# this script calls newer helper APIs later in the bootstrap flow.
 if [ -f "$LIB_PATH" ]; then
     # shellcheck disable=SC1090
     source "$LIB_PATH"
     mkdir -p "$LIB_DIR"
     cp "$LIB_PATH" "$SHARED_LIB"
-elif [ -f "$SHARED_LIB" ]; then
-    # shellcheck disable=SC1090
-    source "$SHARED_LIB"
 else
     mkdir -p "$LIB_DIR"
     curl -fsSL "$LIB_URL" -o "$SHARED_LIB" || {
@@ -94,8 +93,24 @@ chmod +x "$CLI_PATH"
 
 log_ok "Cursor installer script has been placed in $CLI_PATH"
 
-log_step "Ensuring cursor shim..."
-LOCAL_SHIM_PATH="$SCRIPT_DIR/shim.sh" LOCAL_SHIM_HELPER_PATH="$SCRIPT_DIR/scripts/ensure-shim.sh" sync_shim_assets && run_ensure_shim || log_warn "Shim update skipped or failed; continuing."
+INSTALLER_SOURCE_ROOT=""
+if [ -f "$LOCAL_CURSOR_SH" ] && [ -f "$LIB_PATH" ]; then
+    INSTALLER_SOURCE_ROOT="$SCRIPT_DIR"
+    if command -v git >/dev/null 2>&1; then
+        DETECTED_REPO_BRANCH=$(git -C "$SCRIPT_DIR" branch --show-current 2>/dev/null || true)
+        if [ -n "$DETECTED_REPO_BRANCH" ]; then
+            REPO_BRANCH="$DETECTED_REPO_BRANCH"
+        fi
+    fi
+fi
+persist_installer_source_state "$INSTALLER_SOURCE_ROOT"
+
+log_step "Ensuring cursor shim and shell PATH setup..."
+LOCAL_SHIM_PATH="$SCRIPT_DIR/shim.sh"
+LOCAL_SHIM_HELPER_PATH="$SCRIPT_DIR/scripts/ensure-shim.sh"
+LOCAL_SHELL_PATH_SCRIPT="$SCRIPT_DIR/shell-path.sh"
+LOCAL_SHELL_PATH_HELPER_PATH="$SCRIPT_DIR/scripts/ensure-shell-path.sh"
+sync_shim_assets && sync_shell_path_assets && run_ensure_shim && run_ensure_shell_path || log_warn "Shim or shell PATH setup skipped or failed; continuing."
 
 # Check if ~/.local/bin is in PATH
 if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
@@ -103,6 +118,7 @@ if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
     log_info "To add it, run this or add it to your shell profile:"
     log_info "export PATH=\"\$HOME/.local/bin:\$PATH\""
 fi
+warn_if_cursor_shadowed_by_appimage_runtime
 
 # Run cursor --update to download and install Cursor
 log_step "Downloading and installing Cursor ($INSTALL_MODE mode) from ${REPO_OWNER}/${REPO_NAME}@${REPO_BRANCH}..."

@@ -44,7 +44,8 @@ The one‑liner script will:
 2. Download `lib.sh` to `~/.local/share/cursor-installer/lib.sh`
 3. Make the script executable
 4. Install a `cursor` shim at `~/.local/bin/cursor` (see [The `cursor` Shim](#the-cursor-shim))
-5. Download and install the latest version of Cursor
+5. Install a managed shell startup hook for supported shells so `~/.local/bin` stays ahead of transient AppImage runtime paths
+6. Download and install the latest version of Cursor
 
 **Note:** If you're installing via the piped bash method and don't have FUSE2 installed, the script will warn you but continue. You'll need to either:
 
@@ -125,7 +126,8 @@ The uninstall script will:
 1. Remove the `cursor-installer` script from `~/.local/bin/`
 2. Remove the shared `lib.sh` from `~/.local/share/cursor-installer/`
 3. Remove the Cursor AppImage
-4. Ask if you want to remove the Cursor configuration files
+4. Remove the managed shell PATH hook from supported shell startup files
+5. Ask if you want to remove the Cursor configuration files
 
 **Note:** The `cursor` shim at `~/.local/bin/cursor` is not removed by the uninstall script. See [Removing the Shim](#removing-the-shim) for manual cleanup.
 
@@ -211,12 +213,19 @@ The shim bridges that gap. It installs a lightweight script at `~/.local/bin/cur
 
 When you type `cursor`, the shim (`~/.local/bin/cursor`) follows a short resolution chain:
 
-1. **Real Cursor binary found in PATH?** -- Forward all arguments to it (e.g. Cursor's official `cursor` CLI).
-2. **`cursor agent` subcommand?** -- Delegate to `~/.local/bin/agent` if it exists.
-3. **`cursor-installer` found?** -- Delegate to the installer CLI so commands like `cursor --update` still work.
-4. **Nothing found** -- Print a helpful error with install instructions.
+1. **`cursor agent` subcommand?** -- Delegate to `~/.local/bin/agent` if it exists.
+2. **Installer-only flag?** -- Delegate to `cursor-installer` for commands like `cursor --update`, `cursor --check`, or `cursor --extract`.
+3. **Stable Cursor binary found in PATH?** -- Forward all other arguments to it (e.g. Cursor's official `cursor` CLI).
+4. **`cursor-installer` found?** -- Delegate to the installer CLI as a general fallback.
+5. **Nothing found** -- Print a helpful error with install instructions.
 
-The shim never hides a real Cursor binary; it only acts as a fallback.
+The shim does not override a stable Cursor CLI, but it deliberately ignores transient AppImage mount paths under `/tmp/.mount_*` and normalizes duplicate path aliases so it cannot recurse back into itself.
+
+### AppImage Terminals
+
+When Cursor is launched from an AppImage, terminals opened inside Cursor may inherit a `PATH` where Cursor's transient runtime mount (`/tmp/.mount_*`) appears before `~/.local/bin`. That can bypass the shim entirely.
+
+To keep `cursor` resolving to the shim in supported shells, the installer manages a small startup hook that prepends `~/.local/bin` in interactive `bash` and `zsh` sessions. This keeps the shim available while still allowing it to delegate to a real Cursor CLI when appropriate.
 
 ### How It Works
 
@@ -241,6 +250,7 @@ The shim is synced automatically during normal installer operations:
 - **`install.sh`** -- Copies `shim.sh` and `ensure-shim.sh` into `~/.local/share/cursor-installer/`, then runs `ensure-shim.sh`.
 - **`cursor-installer --update`** -- Re-downloads the latest shim assets from GitHub, then re-runs `ensure-shim.sh`.
 - **`cursor-installer` (install paths)** -- Runs `ensure-shim.sh` before each install to keep the shim current.
+- **Shell PATH setup** -- Syncs `shell-path.sh` and `ensure-shell-path.sh`, then ensures supported shell startup files source the PATH helper.
 
 ### File Locations
 
@@ -249,6 +259,8 @@ The shim is synced automatically during normal installer operations:
 | `~/.local/bin/cursor` | The shim (what you invoke). |
 | `~/.local/share/cursor-installer/shim.sh` | Cached copy of the shim source. |
 | `~/.local/share/cursor-installer/ensure-shim.sh` | Cached copy of the installer helper. |
+| `~/.local/share/cursor-installer/shell-path.sh` | Shell snippet that prepends `~/.local/bin`. |
+| `~/.local/share/cursor-installer/ensure-shell-path.sh` | Helper that updates supported shell startup files. |
 
 ### Removing the Shim
 
@@ -264,7 +276,7 @@ If you only want to disable the shim without uninstalling the rest of the projec
 
 ## Note
 
-If you encounter a warning that `~/.local/bin` is not in your PATH, you can add it by running:
+If you encounter a warning that `~/.local/bin` is not in your PATH, or if `cursor` resolves to Cursor's transient AppImage runtime instead of the shim, prepend it by running:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
