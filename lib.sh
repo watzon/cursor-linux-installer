@@ -161,6 +161,57 @@ function apply_local_installer_source_overrides() {
     fi
 }
 
+function get_managed_shell_files() {
+    local candidate
+    local files=()
+
+    for candidate in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+        if [ -e "$candidate" ] || [ -L "$candidate" ]; then
+            files+=("$candidate")
+        fi
+    done
+
+    if [ ${#files[@]} -eq 0 ]; then
+        case "$(basename "${SHELL:-}")" in
+            bash)
+                files+=("$HOME/.bashrc")
+                ;;
+            zsh)
+                files+=("$HOME/.zshrc")
+                ;;
+            sh|dash|ksh)
+                files+=("$HOME/.profile")
+                ;;
+        esac
+    fi
+
+    if [ ${#files[@]} -eq 0 ]; then
+        return 1
+    fi
+
+    local old_ifs="$IFS"
+    IFS=:
+    printf '%s' "${files[*]}"
+    IFS="$old_ifs"
+}
+
+function download_asset_atomically() {
+    local url="$1"
+    local destination="$2"
+    local description="$3"
+    local tmp_file
+
+    tmp_file=$(mktemp)
+    if curl -fsSL "$url" -o "$tmp_file"; then
+        mv "$tmp_file" "$destination"
+        return 0
+    fi
+
+    rm -f "$tmp_file"
+    log_warn "Failed to download $description"
+    return 1
+}
+
 # --- Shim (cursor in PATH): canonical paths and helpers ---
 # Requires LIB_DIR to be set by caller before sourcing lib.
 load_installer_source_state
@@ -188,12 +239,12 @@ function sync_shim_assets() {
     if [ -n "${LOCAL_SHIM_PATH:-}" ] && [ -f "$LOCAL_SHIM_PATH" ]; then
         cp "$LOCAL_SHIM_PATH" "$SHARED_SHIM"
     elif [ ! -f "$SHARED_SHIM" ]; then
-        curl -fsSL "$SHIM_URL" -o "$SHARED_SHIM" || { log_warn "Failed to download shim.sh"; return 1; }
+        download_asset_atomically "$SHIM_URL" "$SHARED_SHIM" "shim.sh" || return 1
     fi
     if [ -n "${LOCAL_SHIM_HELPER_PATH:-}" ] && [ -f "$LOCAL_SHIM_HELPER_PATH" ]; then
         cp "$LOCAL_SHIM_HELPER_PATH" "$SHIM_HELPER"
     elif [ ! -f "$SHIM_HELPER" ]; then
-        curl -fsSL "$SHIM_HELPER_URL" -o "$SHIM_HELPER" || { log_warn "Failed to download ensure-shim.sh"; return 1; }
+        download_asset_atomically "$SHIM_HELPER_URL" "$SHIM_HELPER" "ensure-shim.sh" || return 1
     fi
     chmod +x "$SHIM_HELPER" "$SHARED_SHIM" 2>/dev/null || true
     return 0
@@ -204,12 +255,12 @@ function sync_shell_path_assets() {
     if [ -n "${LOCAL_SHELL_PATH_SCRIPT:-}" ] && [ -f "$LOCAL_SHELL_PATH_SCRIPT" ]; then
         cp "$LOCAL_SHELL_PATH_SCRIPT" "$SHELL_PATH_SCRIPT"
     elif [ ! -f "$SHELL_PATH_SCRIPT" ]; then
-        curl -fsSL "$SHELL_PATH_SCRIPT_URL" -o "$SHELL_PATH_SCRIPT" || { log_warn "Failed to download shell-path.sh"; return 1; }
+        download_asset_atomically "$SHELL_PATH_SCRIPT_URL" "$SHELL_PATH_SCRIPT" "shell-path.sh" || return 1
     fi
     if [ -n "${LOCAL_SHELL_PATH_HELPER_PATH:-}" ] && [ -f "$LOCAL_SHELL_PATH_HELPER_PATH" ]; then
         cp "$LOCAL_SHELL_PATH_HELPER_PATH" "$SHELL_PATH_HELPER"
     elif [ ! -f "$SHELL_PATH_HELPER" ]; then
-        curl -fsSL "$SHELL_PATH_HELPER_URL" -o "$SHELL_PATH_HELPER" || { log_warn "Failed to download ensure-shell-path.sh"; return 1; }
+        download_asset_atomically "$SHELL_PATH_HELPER_URL" "$SHELL_PATH_HELPER" "ensure-shell-path.sh" || return 1
     fi
     chmod +x "$SHELL_PATH_HELPER" "$SHELL_PATH_SCRIPT" 2>/dev/null || true
     return 0
@@ -221,14 +272,12 @@ function refresh_shim_assets() {
     mkdir -p "$LIB_DIR"
     if [ -n "${LOCAL_SHIM_PATH:-}" ] && [ -f "$LOCAL_SHIM_PATH" ]; then
         cp "$LOCAL_SHIM_PATH" "$SHARED_SHIM"
-    elif ! curl -fsSL "$SHIM_URL" -o "$SHARED_SHIM"; then
-        log_warn "Failed to download shim.sh; continuing."
+    elif ! download_asset_atomically "$SHIM_URL" "$SHARED_SHIM" "shim.sh"; then
         return 0
     fi
     if [ -n "${LOCAL_SHIM_HELPER_PATH:-}" ] && [ -f "$LOCAL_SHIM_HELPER_PATH" ]; then
         cp "$LOCAL_SHIM_HELPER_PATH" "$SHIM_HELPER"
-    elif ! curl -fsSL "$SHIM_HELPER_URL" -o "$SHIM_HELPER"; then
-        log_warn "Failed to download ensure-shim.sh; continuing."
+    elif ! download_asset_atomically "$SHIM_HELPER_URL" "$SHIM_HELPER" "ensure-shim.sh"; then
         return 0
     fi
     chmod +x "$SHIM_HELPER" "$SHARED_SHIM" 2>/dev/null || true
@@ -239,14 +288,12 @@ function refresh_shell_path_assets() {
     mkdir -p "$LIB_DIR"
     if [ -n "${LOCAL_SHELL_PATH_SCRIPT:-}" ] && [ -f "$LOCAL_SHELL_PATH_SCRIPT" ]; then
         cp "$LOCAL_SHELL_PATH_SCRIPT" "$SHELL_PATH_SCRIPT"
-    elif ! curl -fsSL "$SHELL_PATH_SCRIPT_URL" -o "$SHELL_PATH_SCRIPT"; then
-        log_warn "Failed to download shell-path.sh; continuing."
+    elif ! download_asset_atomically "$SHELL_PATH_SCRIPT_URL" "$SHELL_PATH_SCRIPT" "shell-path.sh"; then
         return 0
     fi
     if [ -n "${LOCAL_SHELL_PATH_HELPER_PATH:-}" ] && [ -f "$LOCAL_SHELL_PATH_HELPER_PATH" ]; then
         cp "$LOCAL_SHELL_PATH_HELPER_PATH" "$SHELL_PATH_HELPER"
-    elif ! curl -fsSL "$SHELL_PATH_HELPER_URL" -o "$SHELL_PATH_HELPER"; then
-        log_warn "Failed to download ensure-shell-path.sh; continuing."
+    elif ! download_asset_atomically "$SHELL_PATH_HELPER_URL" "$SHELL_PATH_HELPER" "ensure-shell-path.sh"; then
         return 0
     fi
     chmod +x "$SHELL_PATH_HELPER" "$SHELL_PATH_SCRIPT" 2>/dev/null || true
@@ -266,14 +313,25 @@ function run_ensure_shell_path() {
         log_info "Shell PATH helper not found; skipping shell PATH setup."
         return 0
     fi
-    SHELL_PATH_SCRIPT="$SHELL_PATH_SCRIPT" sh "$SHELL_PATH_HELPER" || { log_warn "Shell PATH setup failed; continuing."; return 0; }
+    local target_shell_files
+    target_shell_files="${TARGET_SHELL_FILES:-${MANAGED_SHELL_FILES:-$(get_managed_shell_files || true)}}"
+    if [ -z "$target_shell_files" ]; then
+        log_info "No managed shell rc files detected; skipping shell PATH setup."
+        return 0
+    fi
+    TARGET_SHELL_FILES="$target_shell_files" SHELL_PATH_SCRIPT="$SHELL_PATH_SCRIPT" sh "$SHELL_PATH_HELPER" || { log_warn "Shell PATH setup failed; continuing."; return 0; }
 }
 
 function run_remove_shell_path() {
     if [ ! -f "$SHELL_PATH_HELPER" ]; then
         return 0
     fi
-    SHELL_PATH_SCRIPT="$SHELL_PATH_SCRIPT" sh "$SHELL_PATH_HELPER" --remove || { log_warn "Shell PATH cleanup failed; continuing."; return 0; }
+    local target_shell_files
+    target_shell_files="${TARGET_SHELL_FILES:-${MANAGED_SHELL_FILES:-$(get_managed_shell_files || true)}}"
+    if [ -z "$target_shell_files" ]; then
+        return 0
+    fi
+    TARGET_SHELL_FILES="$target_shell_files" SHELL_PATH_SCRIPT="$SHELL_PATH_SCRIPT" sh "$SHELL_PATH_HELPER" --remove || { log_warn "Shell PATH cleanup failed; continuing."; return 0; }
 }
 
 function warn_if_cursor_shadowed_by_appimage_runtime() {

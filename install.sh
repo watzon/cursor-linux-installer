@@ -42,15 +42,14 @@ BASE_RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REP
 LIB_URL="${BASE_RAW_URL}/lib.sh"
 CURSOR_SCRIPT_URL="${BASE_RAW_URL}/cursor.sh"
 
-# Source shared helpers (local repo, installed lib, or download)
+# Source shared helpers (local repo or freshly downloaded lib).
+# Standalone installs must not rely on a potentially stale shared lib, because
+# this script calls newer helper APIs later in the bootstrap flow.
 if [ -f "$LIB_PATH" ]; then
     # shellcheck disable=SC1090
     source "$LIB_PATH"
     mkdir -p "$LIB_DIR"
     cp "$LIB_PATH" "$SHARED_LIB"
-elif [ -f "$SHARED_LIB" ]; then
-    # shellcheck disable=SC1090
-    source "$SHARED_LIB"
 else
     mkdir -p "$LIB_DIR"
     curl -fsSL "$LIB_URL" -o "$SHARED_LIB" || {

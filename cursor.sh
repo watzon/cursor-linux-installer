@@ -8,6 +8,9 @@ LIB_PATH="$SCRIPT_DIR/lib.sh"
 SHARED_LIB="$LIB_DIR/lib.sh"
 INSTALLER_SOURCE_STATE="$LIB_DIR/source.env"
 LOCAL_LIB_PATH=""
+BOOTSTRAP_REPO_OWNER="${REPO_OWNER:-watzon}"
+BOOTSTRAP_REPO_BRANCH="${REPO_BRANCH:-main}"
+BOOTSTRAP_REPO_NAME="${REPO_NAME:-cursor-linux-installer}"
 
 if [ -f "$INSTALLER_SOURCE_STATE" ]; then
     # shellcheck disable=SC1090
@@ -15,7 +18,12 @@ if [ -f "$INSTALLER_SOURCE_STATE" ]; then
     if [ -n "${INSTALLER_SOURCE_ROOT:-}" ] && [ -f "$INSTALLER_SOURCE_ROOT/lib.sh" ]; then
         LOCAL_LIB_PATH="$INSTALLER_SOURCE_ROOT/lib.sh"
     fi
+    BOOTSTRAP_REPO_OWNER="${INSTALLER_REPO_OWNER:-$BOOTSTRAP_REPO_OWNER}"
+    BOOTSTRAP_REPO_BRANCH="${INSTALLER_REPO_BRANCH:-$BOOTSTRAP_REPO_BRANCH}"
+    BOOTSTRAP_REPO_NAME="${INSTALLER_REPO_NAME:-$BOOTSTRAP_REPO_NAME}"
 fi
+
+BOOTSTRAP_LIB_URL="https://raw.githubusercontent.com/${BOOTSTRAP_REPO_OWNER}/${BOOTSTRAP_REPO_NAME}/${BOOTSTRAP_REPO_BRANCH}/lib.sh"
 
 # Source shared helpers (local repo, persisted local source, or installed lib)
 if [ -f "$LIB_PATH" ]; then
@@ -31,6 +39,49 @@ else
     echo "Error: lib.sh not found. Reinstall using install.sh." >&2
     exit 1
 fi
+
+function ensure_shell_path_lib_apis() {
+    if declare -F refresh_shell_path_assets >/dev/null 2>&1 &&
+        declare -F run_ensure_shell_path >/dev/null 2>&1 &&
+        declare -F run_remove_shell_path >/dev/null 2>&1 &&
+        declare -F warn_if_cursor_shadowed_by_appimage_runtime >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if [ -n "$LOCAL_LIB_PATH" ] && [ -f "$LOCAL_LIB_PATH" ]; then
+        # shellcheck disable=SC1090
+        source "$LOCAL_LIB_PATH"
+    else
+        mkdir -p "$LIB_DIR"
+        if curl -fsSL "$BOOTSTRAP_LIB_URL" -o "$SHARED_LIB"; then
+            # shellcheck disable=SC1090
+            source "$SHARED_LIB"
+        else
+            log_info "Latest shell PATH helper API unavailable; continuing in compatibility mode."
+            return 1
+        fi
+    fi
+
+    if declare -F refresh_shell_path_assets >/dev/null 2>&1 &&
+        declare -F run_ensure_shell_path >/dev/null 2>&1 &&
+        declare -F run_remove_shell_path >/dev/null 2>&1 &&
+        declare -F warn_if_cursor_shadowed_by_appimage_runtime >/dev/null 2>&1; then
+        return 0
+    fi
+
+    log_info "Latest shell PATH helper API unavailable; continuing in compatibility mode."
+    return 1
+}
+
+function run_optional_helper() {
+    local helper="$1"
+
+    if declare -F "$helper" >/dev/null 2>&1; then
+        "$helper"
+    fi
+}
+
+ensure_shell_path_lib_apis || true
 
 CLI_NAME="cursor-installer"
 CLI_BIN="$HOME/.local/bin/$CLI_NAME"
@@ -302,8 +353,8 @@ EOF
 }
 
 function install_cursor_extracted() {
-    run_ensure_shim
-    run_ensure_shell_path
+    run_optional_helper run_ensure_shim
+    run_optional_helper run_ensure_shell_path
     local install_dir="$1"
     local release_track=${2:-stable}
     local temp_file
@@ -453,8 +504,8 @@ function install_cursor_extracted() {
 }
 
 function install_cursor() {
-    run_ensure_shim
-    run_ensure_shell_path
+    run_optional_helper run_ensure_shim
+    run_optional_helper run_ensure_shell_path
     local install_dir="$1"
     local release_track=${2:-stable} # Default to stable if not specified
     
@@ -680,11 +731,11 @@ EOF
 
 function update_cursor() {
     log_step "Updating Cursor..."
-    refresh_shim_assets
-    refresh_shell_path_assets
-    run_ensure_shim
-    run_ensure_shell_path
-    warn_if_cursor_shadowed_by_appimage_runtime
+    run_optional_helper refresh_shim_assets
+    run_optional_helper refresh_shell_path_assets
+    run_optional_helper run_ensure_shim
+    run_optional_helper run_ensure_shell_path
+    run_optional_helper warn_if_cursor_shadowed_by_appimage_runtime
     local current_appimage
     current_appimage=$(find_cursor_appimage || true)
     local install_dir
